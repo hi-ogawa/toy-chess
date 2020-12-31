@@ -9,3 +9,9 @@ CC=clang CXX=clang++ LDFLAGS=-fuse-ld=lld cmake -B build/Release -DCMAKE_BUILD_T
 cmake --build build/Release -j 4
 ./build/Release/main_test
 ```
+
+Benchmark
+
+```
+./build/Release/main_test 'Position::perft--benchmark' --benchmark-samples 5
+```

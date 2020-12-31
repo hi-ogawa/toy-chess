@@ -366,6 +366,8 @@ void Position::unmakeMove(const Move& move) {
 //
 
 vector<Move> Position::generateMoves() const {
+  if (checkers) { return generateEvasionMoves(); }
+
   vector<Move> res;
 
   Color own = side_to_move, opp = !own;
@@ -467,6 +469,82 @@ vector<Move> Position::generateMoves() const {
   return res;
 }
 
+vector<Move> Position::generateEvasionMoves() const {
+  assert(checkers);
+  vector<Move> res;
+
+  auto own = side_to_move;
+  auto king_sq = kingSQ(own);
+
+  // King escape
+  for (auto to : toSQ(king_attack_table[king_sq] & ~occupancy[own])) {
+    res.push_back(Move(king_sq, to));
+  }
+
+  // Capture/Blocking for single check
+  if (toSQ(checkers).size() == 1) {
+    auto checker_sq = toSQ(checkers).front();
+
+    // Capture checker
+    for (auto from : toSQ(getAttackers(!own, checker_sq) & ~pieces[own][kKing])) {
+      // Promotion
+      if (piece_on[own][from] == kPawn && SQ::toRank(checker_sq) == kBackrank[!own]) {
+        for (auto type : {kKnight, kBishop, kRook, kQueen}) {
+          auto move = Move(from, checker_sq, kPromotion);
+          move.promotion_type = type;
+          res.push_back(move);
+        }
+        continue;
+      }
+      res.push_back(Move(from, checker_sq));
+    }
+
+    // Capture double push pawn
+    if (state->ep_square) {
+      Square to = toSQ(state->ep_square).front();
+      Square opp_pawn_sq = to + kPawnPushDirs[!own];
+      Board pawns = piece_on[own][kPawn] & pawn_attack_table[!own][to];
+      if (checker_sq == opp_pawn_sq && pawns) {
+        for (auto from : toSQ(pawns))
+        res.push_back(Move(from, to, kEnpassant));
+      }
+    }
+
+    // Blocker in between
+    Board ray = in_between_table[king_sq][checker_sq];
+    if (ray) {
+      // Block by pawn
+      auto [push1, push2] = getPawnPush(own);
+      for (auto to : toSQ(ray & push1)) {
+        auto from = to - kPawnPushDirs[own];
+        if (SQ::toRank(to) == kBackrank[!own]) {
+          // Promotion
+          for (auto type : {kKnight, kBishop, kRook, kQueen}) {
+            Move move(from, to, kPromotion);
+            move.promotion_type = type;
+            res.push_back(move);
+          }
+        } else {
+          res.push_back(Move(from, to));
+        }
+      }
+      for (auto to : toSQ(ray & push2)) {
+        auto from = to - 2 * kPawnPushDirs[own];
+        res.push_back(Move(from, to));
+      }
+
+      // Block by others
+      for (auto to : toSQ(ray)) {
+        for (auto from : toSQ(getAttackers(!own, to) & ~pieces[own][kPawn] & ~pieces[own][kKing])) {
+          res.push_back(Move(from, to));
+        }
+      }
+    }
+  }
+
+  return res;
+}
+
 vector<Move> Position::generateLegalMoves() const {
   vector<Move> res;
   for (auto move : generateMoves()) {
@@ -479,14 +557,15 @@ bool Position::isLegal(const Move& move) const {
   Color own = side_to_move;
 
   Square king_sq = kingSQ(own);
-  int num_checkers = toSQ(checkers).size();
   bool is_king_move = (piece_on[own][move.from] == kKing);
 
   //
   // Check evasion
   //
 
-  if (num_checkers >= 1) {
+  if (checkers) {
+    int num_checkers = toSQ(checkers).size();
+
     if (move.type == kCastling) { return 0; }
 
     // King's move

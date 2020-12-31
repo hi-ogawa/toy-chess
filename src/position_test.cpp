@@ -74,3 +74,22 @@ TEST_CASE("Position::perft") {
     }
   }
 }
+
+#include <catch2/benchmark/catch_benchmark.hpp>
+
+TEST_CASE("Position::perft--benchmark") {
+  precomputation::initializeTables();
+  Position pos(kFenInitialPosition);
+
+  BENCHMARK("perft(3)") {
+    return pos.perft(3);
+  };
+
+  BENCHMARK("perft(4)") {
+    return pos.perft(4);
+  };
+
+  BENCHMARK("perft(5)") {
+    return pos.perft(5);
+  };
+}

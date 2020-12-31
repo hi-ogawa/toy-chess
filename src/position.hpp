@@ -99,9 +99,9 @@ struct Position {
   // Move generation
   //
 
-  // TODO: Separate move generation for check evasion
   vector<Move> generateMoves() const;
   vector<Move> generateLegalMoves() const;
+  vector<Move> generateEvasionMoves() const;
   bool isLegal(const Move& move) const;
 
   //

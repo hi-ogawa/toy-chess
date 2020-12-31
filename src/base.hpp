@@ -85,6 +85,9 @@ struct SQ {
   static inline Square fromCoords(File file, Rank rank) { return rank * 8 + file; }
   static inline pair<File, Rank> toCoords(Square sq) { return {sq % 8, sq / 8 }; }
 
+  static inline File toFile(Square sq) { return sq % 8; }
+  static inline File toRank(Square sq) { return sq / 8; }
+
   static inline bool isValid(Square sq) { return 0 <= sq && sq < 64; }
 
   static inline bool isAligned(Square sq1, Square sq2, Square sq3) {
