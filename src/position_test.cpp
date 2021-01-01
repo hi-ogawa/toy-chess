@@ -48,9 +48,9 @@ TEST_CASE("Position::generateMoves") {
   precomputation::initializeTables();
 
   Position pos(kFenInitialPosition);
-  auto moves = pos.generateMoves();
   auto expected = "{a2a3, b2b3, c2c3, d2d3, e2e3, f2f3, g2g3, h2h3, a2a4, b2b4, c2c4, d2d4, e2e4, f2f4, g2g4, h2h4, b1a3, b1c3, g1f3, g1h3}";
-  CHECK(toString(moves) == expected);
+  pos.generateMoves();
+  CHECK(toString(pos.move_list->toVector()) == expected);
 }
 
 TEST_CASE("Position::perft") {
@@ -65,7 +65,7 @@ TEST_CASE("Position::perft") {
     {"rnbq1k1r/pp1Pbppp/2p5/8/2B5/8/PPP1NnPP/RNBQK2R w KQ - 1 8",            {{1, 44, 1486, 62379, 2103487,  89941194}}}
   };
 
-  const int max_depth = (kBuildType == "Release") ? 4 : 3;
+  const int max_depth = (kBuildType == "Release") ? 5 : 3;
 
   for (auto [fen, answer] : cases) {
     Position pos(fen);
@@ -75,21 +75,11 @@ TEST_CASE("Position::perft") {
   }
 }
 
-#include <catch2/benchmark/catch_benchmark.hpp>
-
-TEST_CASE("Position::perft--benchmark") {
+TEST_CASE("Position::divide") {
   precomputation::initializeTables();
+
   Position pos(kFenInitialPosition);
-
-  BENCHMARK("perft(3)") {
-    return pos.perft(3);
-  };
-
-  BENCHMARK("perft(4)") {
-    return pos.perft(4);
-  };
-
-  BENCHMARK("perft(5)") {
-    return pos.perft(5);
-  };
+  pos.divide(3);
+  auto expected = "{(a2a3, 380), (b2b3, 420), (c2c3, 420), (d2d3, 539), (e2e3, 599), (f2f3, 380), (g2g3, 420), (h2h3, 380), (a2a4, 420), (b2b4, 421), (c2c4, 441), (d2d4, 560), (e2e4, 600), (f2f4, 401), (g2g4, 421), (h2h4, 420), (b1a3, 400), (b1c3, 440), (g1f3, 440), (g1h3, 400)}";
+  CHECK(toString(pos.divide(3)) == expected);
 }

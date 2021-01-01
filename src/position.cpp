@@ -3,7 +3,8 @@
 using namespace precomputation;
 
 void Position::recompute(int level) {
-  if (level >= 1) {
+  // init
+  if (level >= 2) {
     fillArray(piece_on, kNoPieceType);
     for (Color color = 0; color < 2; color++) {
       occupancy[color] = 0;
@@ -15,9 +16,15 @@ void Position::recompute(int level) {
       }
     }
   }
-  assert((occupancy[kWhite] & occupancy[kBlack]) == 0);
+
+  // init, makeMove, unmakeMove
   occupancy[kBoth] = occupancy[kWhite] | occupancy[kBlack];
-  checkers = getAttackers(side_to_move, kingSQ(side_to_move));
+
+  // init, makeMove
+  if (level >= 1) {
+    state->checkers = getAttackers(side_to_move, kingSQ(side_to_move));
+    state->blockers = getBlockers(side_to_move, kingSQ(side_to_move));
+  }
 }
 
 //
@@ -74,7 +81,7 @@ void Position::setFen(const string& fen) {
   state->rule50 = std::stoi(s_halfmove_clock);
   game_ply = 2 * (std::stoi(s_fullmove_counter) - 1) + (side_to_move == kBlack);
 
-  recompute(1);
+  recompute(2);
 }
 
 array2<char, 8, 8> Position::toCharBoard() const {
@@ -174,6 +181,21 @@ Board Position::getAttackers(Color attacked, Square to, Board removed) const {
     (knight_attack_table[to]         & pieces[!attacked][kKnight]) |
     (getRookAttack(to, occ)   & (pieces[!attacked][kRook]   | pieces[!attacked][kQueen])) |
     (getBishopAttack(to, occ) & (pieces[!attacked][kBishop] | pieces[!attacked][kQueen]));
+}
+
+Board Position::getBlockers(Color own, Square to) const {
+  Board res(0);
+  Board rooks = getRookAttack(to, Board(0)) & (pieces[!own][kRook] | pieces[!own][kQueen]);
+  Board bishops = getBishopAttack(to, Board(0)) & (pieces[!own][kBishop] | pieces[!own][kQueen]);
+  for (auto from : toSQ(rooks)) {
+    Board b = in_between_table[from][to] & occupancy[kBoth];
+    if (toSQ(b).size() == 1) { res |= b; }
+  }
+  for (auto from : toSQ(bishops)) {
+    Board b = in_between_table[from][to] & occupancy[kBoth];
+    if (toSQ(b).size() == 1) { res |= b; }
+  }
+  return res;
 }
 
 bool Position::isPinned(Color own, Square sq, Square from, Square to, Board removed) const {
@@ -310,7 +332,7 @@ void Position::makeMove(const Move& move) {
   game_ply++;
 
   // Recompute states
-  recompute();
+  recompute(1);
 }
 
 void Position::unmakeMove(const Move& move) {
@@ -357,7 +379,7 @@ void Position::unmakeMove(const Move& move) {
   popState();
 
   // Recompute states
-  recompute();
+  recompute(0);
 }
 
 
@@ -365,192 +387,119 @@ void Position::unmakeMove(const Move& move) {
 // Move generation
 //
 
-vector<Move> Position::generateMoves() const {
-  if (checkers) { return generateEvasionMoves(); }
-
-  vector<Move> res;
-
+void Position::generateMoves() {
   Color own = side_to_move, opp = !own;
-  auto& occ = occupancy[kBoth];
-  auto& own_occ = occupancy[own];
-  auto& opp_occ = occupancy[opp];
+  Board& occ = occupancy[kBoth];
+  Board& own_occ = occupancy[own];
+  Board& opp_occ = occupancy[opp];
+  Square king_sq = kingSQ(own);
 
-  // Pawn
-  {
-    // Push
-    auto [push1, push2] = getPawnPush(own);
-    for (auto to : toSQ(push1)) {
-      auto from = to - kPawnPushDirs[own];
-      if (kBackrankBB[opp] & toBB(to)) {
-        // Promotion
+  bool checked = state->checkers;
+  bool multiple_checked = toSQ(state->checkers).size() >= 2;
+  Board target = 0;
+  if (!checked) {
+    // Quiet or Capture
+    target = ~own_occ;
+  }
+  if (checked && !multiple_checked) {
+    // Block or Capture single checker
+    Square checker_sq = toSQ(state->checkers).front();
+    target = in_between_table[king_sq][checker_sq] | state->checkers;
+  }
+
+  if (!multiple_checked) {
+    // Pawn
+    {
+      // Push
+      auto [push1, push2] = getPawnPush(own);
+      push1 &= target;
+      push2 &= target;
+      for (auto to : toSQ(push1 & kBackrankBB[opp])) { // Promotion
+        auto from = to - kPawnPushDirs[own];
         for (auto type : {kKnight, kBishop, kRook, kQueen}) {
           Move move(from, to, kPromotion);
           move.promotion_type = type;
-          res.push_back(move);
+          move_list->insert(move);
         }
-      } else {
-        res.push_back(Move(from, to));
       }
-    }
-    for (auto to : toSQ(push2)) {
-      assert(!(kBackrankBB[opp] & toBB(to)));
-      auto from = to - 2 * kPawnPushDirs[own];
-      res.push_back(Move(from, to));
-    }
+      for (auto to : toSQ(push1 & ~kBackrankBB[opp])) { // Non-promotion
+        auto from = to - kPawnPushDirs[own];
+        move_list->insert(Move(from, to));
+      }
+      for (auto to : toSQ(push2)) { // Double push
+        auto from = to - 2 * kPawnPushDirs[own];
+        move_list->insert(Move(from, to));
+      }
 
-    for (auto from : toSQ(pieces[own][kPawn])) {
-      // Capture
-      for (auto to : toSQ(pawn_attack_table[own][from] & opp_occ)) {
-        // Promotion
-        if (kBackrankBB[opp] & toBB(to)) {
+      for (auto from : toSQ(pieces[own][kPawn])) {
+        // Capture
+        Board capture = pawn_attack_table[own][from] & opp_occ & target;
+        for (auto to : toSQ(capture & kBackrankBB[opp])) { // Promotion
           for (auto type : {kKnight, kBishop, kRook, kQueen}) {
             Move move(from, to, kPromotion);
             move.promotion_type = type;
-            res.push_back(move);
+            move_list->insert(move);
           }
-        } else {
-          res.push_back(Move(from, to));
+        }
+        for (auto to : toSQ(capture & ~kBackrankBB[opp])) { // Non-promotion
+          move_list->insert(Move(from, to));
+        }
+
+        // En passant
+        if (pawn_attack_table[own][from] & state->ep_square) {
+          auto to = toSQ(state->ep_square).front();
+          move_list->insert(Move(from, to, kEnpassant));
         }
       }
+    }
 
-      // En passant
-      if (pawn_attack_table[own][from] & state->ep_square) {
-        auto to = toSQ(state->ep_square).front();
-        res.push_back(Move(from, to, kEnpassant));
+    // Knight
+    for (auto from : toSQ(pieces[own][kKnight])) {
+      for (auto to : toSQ(knight_attack_table[from] & target)) {
+        move_list->insert(Move(from, to));
       }
     }
-  }
 
-  // Knight
-  for (auto from : toSQ(pieces[own][kKnight])) {
-    for (auto to : toSQ(knight_attack_table[from] & ~own_occ)) {
-      res.push_back(Move(from, to));
+    // Bishop
+    for (auto from : toSQ(pieces[own][kBishop])) {
+      for (auto to : toSQ(getBishopAttack(from, occ) & target)) {
+        move_list->insert(Move(from, to));
+      }
     }
-  }
 
-  // Bishop
-  for (auto from : toSQ(pieces[own][kBishop])) {
-    for (auto to : toSQ(getBishopAttack(from, occ) & ~own_occ)) {
-      res.push_back(Move(from, to));
+    // Rook
+    for (auto from : toSQ(pieces[own][kRook])) {
+      for (auto to : toSQ(getRookAttack(from, occ) & target)) {
+        move_list->insert(Move(from, to));
+      }
     }
-  }
 
-  // Rook
-  for (auto from : toSQ(pieces[own][kRook])) {
-    for (auto to : toSQ(getRookAttack(from, occ) & ~own_occ)) {
-      res.push_back(Move(from, to));
-    }
-  }
-
-  // Queen
-  for (auto from : toSQ(pieces[own][kQueen])) {
-    for (auto to : toSQ(getQueenAttack(from, occ) & ~own_occ)) {
-      res.push_back(Move(from, to));
+    // Queen
+    for (auto from : toSQ(pieces[own][kQueen])) {
+      for (auto to : toSQ(getQueenAttack(from, occ) & target)) {
+        move_list->insert(Move(from, to));
+      }
     }
   }
 
   // King
   for (auto from : toSQ(pieces[own][kKing])) {
     for (auto to : toSQ(king_attack_table[from] & ~own_occ)) {
-      res.push_back(Move(from, to));
+      move_list->insert(Move(from, to));
     }
   }
 
   // Castling
-  for (auto side : {kOO, kOOO}) {
-    if (!state->castling_rights[own][side]) { continue; }
-    auto [king_from, king_to, rook_from, rook_to] = kCastlingMoves[own][side];
-    if (in_between_table[king_from][rook_from] & occ) { continue; }
-    Move move(king_from, king_to, kCastling);
-    move.castling_side = side;
-    res.push_back(move);
-  }
-
-  return res;
-}
-
-vector<Move> Position::generateEvasionMoves() const {
-  assert(checkers);
-  vector<Move> res;
-
-  auto own = side_to_move;
-  auto king_sq = kingSQ(own);
-
-  // King escape
-  for (auto to : toSQ(king_attack_table[king_sq] & ~occupancy[own])) {
-    res.push_back(Move(king_sq, to));
-  }
-
-  // Capture/Blocking for single check
-  if (toSQ(checkers).size() == 1) {
-    auto checker_sq = toSQ(checkers).front();
-
-    // Capture checker
-    for (auto from : toSQ(getAttackers(!own, checker_sq) & ~pieces[own][kKing])) {
-      // Promotion
-      if (piece_on[own][from] == kPawn && SQ::toRank(checker_sq) == kBackrank[!own]) {
-        for (auto type : {kKnight, kBishop, kRook, kQueen}) {
-          auto move = Move(from, checker_sq, kPromotion);
-          move.promotion_type = type;
-          res.push_back(move);
-        }
-        continue;
-      }
-      res.push_back(Move(from, checker_sq));
-    }
-
-    // Capture double push pawn
-    if (state->ep_square) {
-      Square to = toSQ(state->ep_square).front();
-      Square opp_pawn_sq = to + kPawnPushDirs[!own];
-      Board pawns = piece_on[own][kPawn] & pawn_attack_table[!own][to];
-      if (checker_sq == opp_pawn_sq && pawns) {
-        for (auto from : toSQ(pawns))
-        res.push_back(Move(from, to, kEnpassant));
-      }
-    }
-
-    // Blocker in between
-    Board ray = in_between_table[king_sq][checker_sq];
-    if (ray) {
-      // Block by pawn
-      auto [push1, push2] = getPawnPush(own);
-      for (auto to : toSQ(ray & push1)) {
-        auto from = to - kPawnPushDirs[own];
-        if (SQ::toRank(to) == kBackrank[!own]) {
-          // Promotion
-          for (auto type : {kKnight, kBishop, kRook, kQueen}) {
-            Move move(from, to, kPromotion);
-            move.promotion_type = type;
-            res.push_back(move);
-          }
-        } else {
-          res.push_back(Move(from, to));
-        }
-      }
-      for (auto to : toSQ(ray & push2)) {
-        auto from = to - 2 * kPawnPushDirs[own];
-        res.push_back(Move(from, to));
-      }
-
-      // Block by others
-      for (auto to : toSQ(ray)) {
-        for (auto from : toSQ(getAttackers(!own, to) & ~pieces[own][kPawn] & ~pieces[own][kKing])) {
-          res.push_back(Move(from, to));
-        }
-      }
+  if (!checked) {
+    for (auto side : {kOO, kOOO}) {
+      if (!state->castling_rights[own][side]) { continue; }
+      auto [king_from, king_to, rook_from, rook_to] = kCastlingMoves[own][side];
+      if (in_between_table[king_from][rook_from] & occ) { continue; }
+      Move move(king_from, king_to, kCastling);
+      move.castling_side = side;
+      move_list->insert(move);
     }
   }
-
-  return res;
-}
-
-vector<Move> Position::generateLegalMoves() const {
-  vector<Move> res;
-  for (auto move : generateMoves()) {
-    if (isLegal(move)) { res.push_back(move); }
-  }
-  return res;
 }
 
 bool Position::isLegal(const Move& move) const {
@@ -563,8 +512,8 @@ bool Position::isLegal(const Move& move) const {
   // Check evasion
   //
 
-  if (checkers) {
-    int num_checkers = toSQ(checkers).size();
+  if (state->checkers) {
+    int num_checkers = toSQ(state->checkers).size();
 
     if (move.type == kCastling) { return 0; }
 
@@ -575,8 +524,8 @@ bool Position::isLegal(const Move& move) const {
     if (num_checkers >= 2) { return 0; }
 
     // Single check
-    auto checker_sq = toSQ(checkers).front();
-    if (isPinned(own, king_sq, move.from, move.to, toBB(move.from))) { return 0; }
+    auto checker_sq = toSQ(state->checkers).front();
+    if (isPinned(own, king_sq, move.from, move.to, toBB(move.from))) { return 0; } // TODO: Can we use "state->blockers"?
     if (move.to == checker_sq) { return 1; } // capture
     if (move.type == kEnpassant && checker_sq == move.getEnpassantCapturedSquare()) { return 1; } // Enpassant capture
     if (in_between_table[king_sq][checker_sq] & toBB(move.to)) { return 1; } // blocking
@@ -609,38 +558,39 @@ bool Position::isLegal(const Move& move) const {
   if (is_king_move) { return !getAttackers(own, move.to); }
 
   // Pinned piece move
-  if (isPinned(own, king_sq, move.from, move.to, toBB(move.from))) { return 0; }
+  if (state->blockers & toBB(move.from)) {
+    return SQ::isAligned(king_sq, move.from, move.to);
+  }
 
   return 1;
 }
 
 int64_t Position::perft(int depth, int debug) {
   assert(depth >= 0);
-  int64_t cnt = 0;
-  std::function<void(int)> rec = [&](int depth) {
-    if (depth == 0) { cnt++; return; }
-    for (auto move : generateLegalMoves()) {
-      makeMove(move);
-      if (debug >= 1) { dbg(depth, move); }
-      if (debug >= 2) { print(); }
-      rec(depth - 1);
-      unmakeMove(move);
-    }
-  };
-  rec(depth);
-  return cnt;
+  if (depth == 0) { return 1; }
+  int64_t res = 0;
+  generateMoves();
+  while (auto move = move_list->getNext()) {
+    if (depth == 1) { res++; continue; }
+    makeMove(*move);
+    if (debug >= 1) { dbg(depth, *move); }
+    if (debug >= 2) { print(); }
+    res += perft(depth - 1, debug);
+    unmakeMove(*move);
+  }
+  return res;
 }
 
 vector<pair<Move, int64_t>> Position::divide(int depth, int debug) {
   assert(depth >= 1);
   vector<pair<Move, int64_t>> res;
-  for (auto move : generateLegalMoves()) {
-    makeMove(move);
-    if (debug >= 1) { dbg(depth, move); }
+  generateMoves();
+  while (auto move = move_list->getNext()) {
+    makeMove(*move);
+    if (debug >= 1) { dbg(depth, *move); }
     if (debug >= 2) { print(); }
-    auto cnt = perft(depth - 1, debug);
-    res.push_back({move, cnt});
-    unmakeMove(move);
+    res.push_back({*move, perft(depth - 1, debug)});
+    unmakeMove(*move);
   }
   return res;
 }
