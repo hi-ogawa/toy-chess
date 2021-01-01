@@ -1,0 +1,31 @@
+name: CI
+on: [push]
+jobs:
+  unit:
+    name: Unit testing
+    runs-on: ubuntu-latest
+    steps:
+      - name: Git checkout
+        uses: actions/checkout@v2
+        with:
+          submodules: true
+      - name: Install tools
+        run: sudo apt install cmake
+      - name: Building
+        run: cmake -B build/Release -DCMAKE_BUILD_TYPE=Release && cmake --build build/Release
+      - name: === Unit testing ===
+        run: build/Release/main_test -s
+  benchmark:
+    name: Benchmark
+    runs-on: ubuntu-latest
+    steps:
+      - name: Git checkout
+        uses: actions/checkout@v2
+        with:
+          submodules: true
+      - name: Install tools
+        run: sudo apt install cmake
+      - name: Building
+        run: cmake -B build/Release -DCMAKE_BUILD_TYPE=Release && cmake --build build/Release
+      - name: === Benchmark ===
+        run: build/Release/main_bench --benchmark-samples 10
