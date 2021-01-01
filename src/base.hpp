@@ -88,6 +88,9 @@ struct SQ {
   static inline File toFile(Square sq) { return sq % 8; }
   static inline File toRank(Square sq) { return sq / 8; }
 
+  static inline Square flipFile(Square sq) { return sq ^ 7; }
+  static inline Square flipRank(Square sq) { return sq ^ (7 << 3); }
+
   static inline bool isValid(Square sq) { return 0 <= sq && sq < 64; }
 
   static inline bool isAligned(Square sq1, Square sq2, Square sq3) {

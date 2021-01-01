@@ -12,6 +12,7 @@ void Position::recompute(int level) {
         occupancy[color] |= pieces[color][type];
         for (auto sq : toSQ(pieces[color][type])) {
           piece_on[color][sq] = type;
+          evaluation.putPiece(color, type, sq);
         }
       }
     }
@@ -231,6 +232,7 @@ void Position::putPiece(Color color, PieceType type, Square sq) {
   pieces[color][type] ^= toBB(sq);
   occupancy[color] ^= toBB(sq);
   piece_on[color][sq] = type;
+  evaluation.putPiece(color, type, sq);
 }
 
 void Position::removePiece(Color color, Square sq) {
@@ -239,9 +241,11 @@ void Position::removePiece(Color color, Square sq) {
   pieces[color][type] ^= toBB(sq);
   occupancy[color] ^= toBB(sq);
   piece_on[color][sq] = kNoPieceType;
+  evaluation.removePiece(color, type, sq);
 }
 
-void Position::movePiece(Color color, PieceType type, Square from, Square to) {
+void Position::movePiece(Color color, Square from, Square to) {
+  auto type = piece_on[color][from];
   removePiece(color, from);
   putPiece(color, type, to);
 }
@@ -266,15 +270,15 @@ void Position::makeMove(const Move& move) {
   }
 
   if (move.type == kNormal) {
-    movePiece(own, from_type, move.from, move.to);
+    movePiece(own, move.from, move.to);
   }
 
   if (move.type == kCastling) {
     auto [king_from, king_to, rook_from, rook_to] = kCastlingMoves[own][move.castling_side];
     assert(piece_on[own][king_from] == kKing      && piece_on[own][rook_from] == kRook);
     assert(piece_on[own][king_to] == kNoPieceType && piece_on[own][rook_to] == kNoPieceType);
-    movePiece(own, kKing, king_from, king_to);
-    movePiece(own, kRook, rook_from, rook_to);
+    movePiece(own, king_from, king_to);
+    movePiece(own, rook_from, rook_to);
   }
 
   if (move.type == kPromotion) {
@@ -285,7 +289,7 @@ void Position::makeMove(const Move& move) {
   if (move.type == kEnpassant) {
     auto sq = move.getEnpassantCapturedSquare();
     assert(piece_on[opp][sq] == kPawn);
-    movePiece(own, from_type, move.from, move.to);
+    movePiece(own, move.from, move.to);
     removePiece(opp, sq);
   }
 
@@ -341,9 +345,8 @@ void Position::unmakeMove(const Move& move) {
   game_ply--;
 
   Color own = side_to_move, opp = !own;
-  auto from_type = piece_on[own][move.to];
   auto to_type = state->to_piece_type;
-  assert(from_type != kNoPieceType);
+  assert(piece_on[own][move.to] != kNoPieceType);
 
   //
   // put/remove/move pieces
@@ -355,13 +358,13 @@ void Position::unmakeMove(const Move& move) {
   }
 
   if (move.type == kNormal) {
-    movePiece(own, from_type, move.to, move.from);
+    movePiece(own, move.to, move.from);
   }
 
   if (move.type == kCastling) {
     auto [king_from, king_to, rook_from, rook_to] = kCastlingMoves[own][move.castling_side];
-    movePiece(own, kKing, king_to, king_from);
-    movePiece(own, kRook, rook_to, rook_from);
+    movePiece(own, king_to, king_from);
+    movePiece(own, rook_to, rook_from);
   }
 
   if (move.type == kPromotion) {
@@ -372,7 +375,7 @@ void Position::unmakeMove(const Move& move) {
   if (move.type == kEnpassant) {
     auto sq = move.getEnpassantCapturedSquare();
     putPiece(opp, kPawn, sq);
-    movePiece(own, from_type, move.to, move.from);
+    movePiece(own, move.to, move.from);
   }
 
   // Restore irreversible state (castling rights, en passant square, rule50)
