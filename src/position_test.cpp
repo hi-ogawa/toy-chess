@@ -92,11 +92,3 @@ TEST_CASE("Position::evaluate") {
   pos.makeMove(Move(kE2, kE4));
   CHECK(pos.evaluate() == - (kPsqTable[kPawn][SQ::flipRank(kE4)] - kPsqTable[kPawn][SQ::flipRank(kE2)]) + kTempo);
 }
-
-TEST_CASE("Position::search") {
-  precomputation::initializeTables();
-
-  Position pos("8/8/2k5/7R/6R1/4K3/8/8 w - - 0 1");
-  auto res = pos.search(6);
-  CHECK(toString(res) == "(31995, {g4g6, c6b7, h5h7, b7a8, g6g8, NONE})");
-}

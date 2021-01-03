@@ -256,7 +256,7 @@ void Position::makeMove(const Move& move) {
 
   Color own = side_to_move, opp = !own;
   auto from_type = piece_on[own][move.from];
-  auto to_type = piece_on[opp][move.to];
+  auto to_type = state->to_piece_type = piece_on[opp][move.to];
   assert(from_type != kNoPieceType);
 
   //
@@ -265,7 +265,6 @@ void Position::makeMove(const Move& move) {
 
   if (to_type != kNoPieceType) { // Capture except en passant (thus, this includes promotion)
     assert(to_type != kKing);
-    state->to_piece_type = to_type;
     removePiece(opp, move.to);
   }
 

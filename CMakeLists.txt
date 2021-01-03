@@ -10,6 +10,9 @@ if(CMAKE_BUILD_TYPE MATCHES Debug)
   add_link_options(-fsanitize=address -fsanitize=undefined)
 endif()
 
+# Pthread for std::async
+add_link_options(-lpthread)
+
 # Catch2 testing
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/Catch2)
 
@@ -22,21 +25,36 @@ target_precompile_headers(main_pch PUBLIC <bits/stdc++.h>)
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
 configure_file(src/config.hpp.in ${CMAKE_CURRENT_BINARY_DIR}/config.hpp @ONLY)
 
+#
 # Targets
+#
+
+# main_lib
 add_library(main_lib
   src/precomputation.cpp
   src/position.cpp
+  src/engine.cpp
+  src/uci.cpp
 )
 target_precompile_headers(main_lib REUSE_FROM main_pch)
 
+# main_test
 add_executable(main_test
   src/base_test.cpp
   src/precomputation_test.cpp
   src/position_test.cpp
+  src/engine_test.cpp
+  src/uci_test.cpp
 )
 target_link_libraries(main_test PRIVATE main_lib Catch2WithMain)
 target_precompile_headers(main_test REUSE_FROM main_pch)
 
+# main
+add_executable(main src/main.cpp)
+target_link_libraries(main PRIVATE main_lib)
+target_precompile_headers(main REUSE_FROM main_pch)
+
+# main_bench
 if(CMAKE_BUILD_TYPE MATCHES Release)
   add_executable(main_bench
     src/position_bench.cpp

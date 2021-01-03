@@ -72,3 +72,27 @@ struct Rng {
     return (uint64_t(x) << 32) | y;
   }
 };
+
+//
+// Thread-safe Queue (API is similar to https://docs.python.org/3/library/queue.html)
+//
+template<class T>
+struct Queue {
+  std::deque<T> queue;
+  std::mutex mutex;
+  std::condition_variable cv_not_empty;
+
+  void put(const T& data) {
+    std::unique_lock<std::mutex> lock(mutex);
+    queue.push_back(data);
+    lock.unlock();
+    cv_not_empty.notify_one();
+  }
+
+  T get() {
+    std::unique_lock<std::mutex> lock(mutex);
+    cv_not_empty.wait(lock, [&](){ return !queue.empty(); });
+    auto data = queue.front(); queue.pop_front();
+    return data;
+  }
+};

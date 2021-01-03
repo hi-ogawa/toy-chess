@@ -85,6 +85,13 @@ struct SQ {
   static inline Square fromCoords(File file, Rank rank) { return rank * 8 + file; }
   static inline pair<File, Rank> toCoords(Square sq) { return {sq % 8, sq / 8 }; }
 
+  static inline Square fromString(const string& str) {
+    assert((int)str.size() == 2);
+    auto sq = fromCoords(str[0] - 'a', str[1] - '1');
+    assert(isValid(sq));
+    return sq;
+  }
+
   static inline File toFile(Square sq) { return sq % 8; }
   static inline File toRank(Square sq) { return sq / 8; }
 

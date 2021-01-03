@@ -10,9 +10,9 @@ jobs:
         with:
           submodules: true
       - name: Install tools
-        run: sudo apt install cmake
+        run: sudo apt-get install cmake clang
       - name: Building
-        run: cmake -B build/Release -DCMAKE_BUILD_TYPE=Release && cmake --build build/Release
+        run: CC=clang CXX=clang++ LDFLAGS=-fuse-ld=lld cmake -B build/Release -DCMAKE_BUILD_TYPE=Release && cmake --build build/Release
       - name: === Unit testing ===
         run: build/Release/main_test -s
   benchmark:
@@ -24,8 +24,8 @@ jobs:
         with:
           submodules: true
       - name: Install tools
-        run: sudo apt install cmake
+        run: sudo apt-get install cmake clang
       - name: Building
-        run: cmake -B build/Release -DCMAKE_BUILD_TYPE=Release && cmake --build build/Release
+        run: CC=clang CXX=clang++ LDFLAGS=-fuse-ld=lld cmake -B build/Release -DCMAKE_BUILD_TYPE=Release && cmake --build build/Release
       - name: === Benchmark ===
         run: build/Release/main_bench --benchmark-samples 10

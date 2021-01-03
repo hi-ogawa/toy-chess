@@ -96,13 +96,10 @@ const inline Score kTempo = 10;
 struct Position;
 
 struct Evaluation {
-  const Position& position;
   array<Score, 2> piece_value = {};
   array<Score, 2> psq = {};
 
   static inline Score mateScore(int ply) { return kScoreMate - ply; }
-
-  Evaluation(const Position& position) : position{position} {}
 
   Score value() const {
     Score res = 0;

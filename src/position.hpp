@@ -11,8 +11,8 @@
 enum MoveType { kNormal, kCastling, kPromotion, kEnpassant, kNoMoveType };
 
 struct Move {
-  Square from;
-  Square to;
+  Square from = 0;
+  Square to = 0;
   MoveType type = kNoMoveType;
   PieceType promotion_type;
   CastlingSide castling_side;
@@ -95,20 +95,25 @@ struct Position {
   MoveList* move_list;
   array<MoveList, kMaxDepth> move_list_stack;
 
-  Position(const string& fen) : evaluation{*this} {
+  Position(const string& fen = kFenInitialPosition) {
+    initialize(fen);
+  }
+
+  void initialize(const string& fen) {
     state = &state_stack[0];
+    *state = {};
 
     move_list = &move_list_stack[0];
     move_list->initialize(this);
+
+    evaluation = {};
 
     setFen(fen);
   }
 
   void pushState() {
-    auto prev = state++;
-    *state = *prev;
-    state->to_piece_type = kNoPieceType;
-
+    auto prev = state;
+    *(++state) = *prev;
     (++move_list)->initialize(this);
   }
 
@@ -171,60 +176,5 @@ struct Position {
     if (side_to_move == kBlack) { res *= -1; }
     res += kTempo;
     return res;
-  }
-
-  //
-  // Search
-  //
-  struct SearchResult {
-    Score score = 0;
-    vector<Move> pv;
-
-    void print(std::ostream& ostr = std::cerr) const { ostr << make_tuple(score, pv); }
-    friend std::ostream& operator<<(std::ostream& ostr, const SearchResult& self) { self.print(ostr); return ostr; }
-  };
-
-  struct SearchState {
-    array<Move, kMaxDepth> pv;
-  };
-  array<SearchState, kMaxDepth> search_state_stack;
-
-  SearchResult search(int depth) {
-    SearchResult res;
-    SearchState* search_state = &search_state_stack[0];
-    res.score = searchImpl(-kScoreInf, kScoreInf, 0, depth, search_state);
-    res.pv.resize(depth);
-    for (int i = 0; i < depth; i++) { res.pv[i] = search_state->pv[i]; }
-    return res;
-  }
-
-  Score searchImpl(Score alpha, Score beta, int depth, int depth_end, SearchState* search_state) {
-    if (depth == depth_end) { return evaluate(); }
-    Move best_move;
-    generateMoves();
-    while (auto move = move_list->getNext()) {
-      makeMove(*move);
-      auto score = -searchImpl(-beta, -alpha, depth + 1, depth_end, search_state + 1);
-      unmakeMove(*move);
-      if (beta <= score) { return score; } // beta cut
-      if (alpha < score) {
-        alpha = score;
-        best_move = *move;
-        for (int d = depth + 1; d < depth_end; d++) {
-          search_state->pv[d] = (search_state + 1)->pv[d];
-        }
-      }
-    }
-    // Leaf node (checkmate or stalemate)
-    if (move_list->size() == 0) {
-      auto score = state->checkers ? -Evaluation::mateScore(depth) : kScoreDraw;
-      if (beta <= score) { return score; } // beta cut
-      if (alpha < score) {
-        alpha = score;
-        best_move = Move(0, 0, kNoMoveType);
-      }
-    }
-    search_state->pv[depth] = best_move;
-    return alpha;
   }
 };
