@@ -109,6 +109,8 @@ struct Position {
     evaluation = {};
 
     setFen(fen);
+
+    recompute(2);
   }
 
   void pushState() {

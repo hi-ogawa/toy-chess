@@ -10,6 +10,9 @@ if(CMAKE_BUILD_TYPE MATCHES Debug)
   add_link_options(-fsanitize=address -fsanitize=undefined)
 endif()
 
+# SIMD
+# add_compile_options(-mavx -mfma)
+
 # Pthread for std::async
 add_link_options(-lpthread)
 
@@ -35,6 +38,7 @@ add_library(main_lib
   src/position.cpp
   src/engine.cpp
   src/uci.cpp
+  # src/nn/evaluator.cpp
 )
 target_precompile_headers(main_lib REUSE_FROM main_pch)
 
@@ -45,6 +49,7 @@ add_executable(main_test
   src/position_test.cpp
   src/engine_test.cpp
   src/uci_test.cpp
+  # src/nn/evaluator_test.cpp
 )
 target_link_libraries(main_test PRIVATE main_lib Catch2WithMain)
 target_precompile_headers(main_test REUSE_FROM main_pch)
@@ -62,3 +67,7 @@ if(CMAKE_BUILD_TYPE MATCHES Release)
   target_link_libraries(main_bench PRIVATE main_lib Catch2WithMain)
   target_precompile_headers(main_bench REUSE_FROM main_pch)
 endif()
+
+# nn_preprocess
+add_executable(nn_preprocess src/nn/training/preprocess.cpp)
+target_precompile_headers(nn_preprocess REUSE_FROM main_pch)

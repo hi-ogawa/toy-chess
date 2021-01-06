@@ -81,8 +81,6 @@ void Position::setFen(const string& fen) {
   // Counter
   state->rule50 = std::stoi(s_halfmove_clock);
   game_ply = 2 * (std::stoi(s_fullmove_counter) - 1) + (side_to_move == kBlack);
-
-  recompute(2);
 }
 
 array2<char, 8, 8> Position::toCharBoard() const {

@@ -1,0 +1,9 @@
+gensfen-*.binpack
+gensfen-*.binpack.gz
+gensfen-*.bin
+gensfen-*.plain
+gensfen-*.halfkp
+gensfen-*.halfkp.gz
+ckpt-*.pt
+ckpt-*.bin
+default.bin

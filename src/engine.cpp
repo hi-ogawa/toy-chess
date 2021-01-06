@@ -23,7 +23,7 @@ void Engine::go(Position& pos, int depth_end) {
   results[1].type = kSearchResultInfo;
   search_result_callback(results[1]);
 
-  // Iterate depening until "interrupt" or reaching "depth_end"
+  // Iterative deepening until "interrupt" or reaching "depth_end"
   for (int depth = 2; depth <= depth_end; depth++) {
     auto res = search(pos, depth);
     if (interrupt) { break; } // Ignore possibly incomplete result

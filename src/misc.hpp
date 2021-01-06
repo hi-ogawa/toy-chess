@@ -32,6 +32,15 @@ string toString(const T& v) {
 }
 
 //
+// Assertion
+//
+
+#define ASSERT(EXPR) \
+  if(!static_cast<bool>(EXPR)) { \
+    throw std::runtime_error{"[" __FILE__ ":" + std::to_string(__LINE__) + "] " #EXPR}; \
+  }
+
+//
 // std::array utility
 //
 template<class T, size_t N1, size_t N2>
@@ -94,5 +103,39 @@ struct Queue {
     cv_not_empty.wait(lock, [&](){ return !queue.empty(); });
     auto data = queue.front(); queue.pop_front();
     return data;
+  }
+};
+
+//
+// Command line parser
+//
+struct Cli {
+  const int argc;
+  const char** argv;
+  vector<string> flags = {};
+
+  string help() {
+    string res = "Usage: <program>";
+    for (auto flag : flags) { res += " " + flag; }
+    return res;
+  }
+
+  template<typename T>
+  T parse(const char* s) {
+    std::istringstream stream{s};
+    T result;
+    stream >> result;
+    return result;
+  }
+
+  template<typename T>
+  std::optional<T> getArg(const string& flag) {
+    flags.push_back(flag);
+    for (auto i = 1; i < argc; i++) {
+      if (flag == argv[i] && i + 1 < argc) {
+        return parse<T>(argv[i + 1]);
+      }
+    }
+    return {};
   }
 };
