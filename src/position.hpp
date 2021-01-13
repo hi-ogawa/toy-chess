@@ -2,7 +2,7 @@
 
 #include "base.hpp"
 #include "precomputation.hpp"
-#include "evaluation.hpp"
+#include "nn/evaluator.hpp"
 
 //
 // Move
@@ -106,11 +106,14 @@ struct Position {
     move_list = &move_list_stack[0];
     move_list->initialize(this);
 
-    evaluation = {};
-
     setFen(fen);
 
     recompute(2);
+  }
+
+  // Reset internal stack etc...
+  void reset() {
+    initialize(toFen());
   }
 
   void pushState() {
@@ -170,11 +173,12 @@ struct Position {
   //
   // Evaluation
   //
-  Evaluation evaluation;
+  nn::Evaluator* evaluator = nullptr;
 
   // Score for side_to_move
   Score evaluate() const {
-    Score res = evaluation.value();
+    ASSERT(evaluator);
+    Score res = evaluator->evaluate();
     if (side_to_move == kBlack) { res *= -1; }
     res += kTempo;
     return res;

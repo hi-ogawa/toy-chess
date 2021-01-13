@@ -17,33 +17,17 @@ struct UCI {
   std::istream& istr;
   std::ostream& ostr;
   std::ostream& err_ostr;
-  Queue<Event> queue; // single consumer and two producers
 
-  // TODO: we can use std::future to make sure spawned threads are joined properly in the end
-  std::future<void> command_listener_thread_future;
-  std::future<void> engine_thread_future;
+  Queue<Event> queue; // single consumer and two producers
+  std::future<bool> command_listener_thread_future;
 
   Engine engine;
-  Position position;
 
-  UCI(std::istream& istr, std::ostream& ostr, std::ostream& err_ostr)
-    : istr{istr}, ostr{ostr}, err_ostr{err_ostr} {
-
-    // Setup callback for the engine
-    // TODO: Make sure engine thread won't call this after UCI (thus Queue) is destructed
-    engine.search_result_callback = [&](const SearchResult& search_result) {
-      queue.put(Event({ .type = kSearchResultEvent, .search_result = search_result }));
-    };
-  }
-
-  int mainLoop() {
-    startCommandListenerThread();
-    monitorEvent();
-    return 0;
-  }
-
+  UCI(std::istream&, std::ostream&, std::ostream&);
+  int mainLoop();
   void startCommandListenerThread();
   void monitorEvent();
+  void cleanup();
   void handleCommand(const string&);
   void handleSearchResult(const SearchResult&);
 

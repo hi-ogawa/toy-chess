@@ -1,5 +1,21 @@
 #include "uci.hpp"
 
+UCI::UCI(std::istream& istr, std::ostream& ostr, std::ostream& err_ostr)
+  : istr{istr}, ostr{ostr}, err_ostr{err_ostr} {
+
+  // Setup callback for asynchronous Engine::go
+  engine.search_result_callback = [&](const SearchResult& search_result) {
+    queue.put(Event({ .type = kSearchResultEvent, .search_result = search_result }));
+  };
+}
+
+int UCI::mainLoop() {
+  startCommandListenerThread();
+  monitorEvent();
+  cleanup();
+  return 0;
+}
+
 void UCI::startCommandListenerThread() {
   auto work = [&]() {
     string data;
@@ -7,12 +23,12 @@ void UCI::startCommandListenerThread() {
       queue.put(Event({ .type = kCommandEvent, .command = data }));
     }
     queue.put(Event({ .type = kCommandEvent, .command = "quit" }));
+    return true;
   };
   command_listener_thread_future = std::async(work);
 }
 
 void UCI::monitorEvent() {
-  // Loop until receiving "quit"
   while (true) {
     Event event = queue.get();
     if (event.type == kCommandEvent) {
@@ -23,7 +39,13 @@ void UCI::monitorEvent() {
       handleSearchResult(event.search_result);
     }
   }
+}
+
+void UCI::cleanup() {
   engine.stop();
+  ASSERT(command_listener_thread_future.valid());
+  ASSERT(command_listener_thread_future.wait_for(std::chrono::milliseconds(100)) == std::future_status::ready);
+  ASSERT(command_listener_thread_future.get());
 }
 
 void UCI::handleCommand(const string& s_command) {
@@ -33,6 +55,7 @@ void UCI::handleCommand(const string& s_command) {
     printError("Empty command");
     return;
   }
+
   // Cf. https://www.shredderchess.com/download/div/uci.zip
   if (token == "uci")        { uci_uci(command); } else
   if (token == "debug")      { uci_debug(command); } else
@@ -43,7 +66,8 @@ void UCI::handleCommand(const string& s_command) {
   if (token == "position")   { uci_position(command); } else
   if (token == "go")         { uci_go(command); } else
   if (token == "stop")       { uci_stop(command); } else
-  if (token == "ponderhit")  { uci_ponderhit(command); } else {
+  if (token == "ponderhit")  { uci_ponderhit(command); }
+  else {
     printError("Unknown command - " + token);
   }
 }
@@ -58,6 +82,8 @@ void UCI::handleSearchResult(const SearchResult& result) {
 }
 
 void UCI::uci_position(std::istream& command) {
+  engine.stop();
+
   // position [fen <fenstring> | startpos ] moves <move1> .... <movei>
   auto type = readToken(command);
   if (type != "fen" && type != "startpos") { printError("Invalid position command"); return; }
@@ -71,7 +97,7 @@ void UCI::uci_position(std::istream& command) {
       fen += readToken(command);
     }
   }
-  position.initialize(fen);
+  engine.position.initialize(fen);
 
   auto token = readToken(command);
   if (token.empty()) { return; }
@@ -82,29 +108,40 @@ void UCI::uci_position(std::istream& command) {
     auto s_move = readToken(command);
     if (s_move.empty()) { break; }
 
-    position.generateMoves();
+    engine.position.generateMoves();
     bool found = 0;
-    while (auto move = position.move_list->getNext()) {
+    while (auto move = engine.position.move_list->getNext()) {
       if (toString(*move) == s_move) {
         found = 1;
-        position.makeMove(*move);
+        engine.position.makeMove(*move);
         break;
       }
     }
     assert(found);
   }
-  position.initialize(position.toFen()); // Reset internal stack
+  engine.position.reset();
 }
 
 void UCI::uci_go(std::istream& command) {
-  string type = readToken(command);
-  assert(type == "depth");
+  engine.stop();
 
-  string s_depth = readToken(command);
-  assert(!s_depth.empty());
-  int depth = std::stoi(s_depth);
-  assert(depth >= 1);
+  string token;
+  auto& params = engine.go_parameters;
+  params = {};
+  while (command >> token) {
+    if (token == "searchmoves") { ASSERT(0); }
+    if (token == "ponder") { ASSERT(0); }
+    if (token == "wtime") { command >> params.time[kWhite]; }
+    if (token == "btime") { command >> params.time[kBlack]; }
+    if (token == "winc") { command >> params.inc[kBlack]; }
+    if (token == "binc") { command >> params.inc[kBlack]; }
+    if (token == "movestogo") { command >> params.movestogo; }
+    if (token == "depth") { command >> params.depth; ASSERT(params.depth > 0); }
+    if (token == "nodes") { ASSERT(0); }
+    if (token == "mate") { ASSERT(0); }
+    if (token == "movetime") { command >> params.movetime; }
+    if (token == "infinite") { params.depth = Position::kMaxDepth; }
+  }
 
-  auto work = [&]() { engine.go(position, depth); };
-  engine_thread_future = std::async(work);
+  engine.go(/* blocking */ false);
 }

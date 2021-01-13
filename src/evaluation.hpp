@@ -7,6 +7,10 @@ const Score kScoreInf = 32001;
 const Score kScoreMate = 32000;
 const Score kScoreDraw = 0;
 
+//
+// NOTE: Below are not used since evaluation is succeeded by nn::Evaluator
+//
+
 // Cf. https://www.chessprogramming.org/Simplified_Evaluation_Function by Tomasz Michniewski
 
 // B > N > 3P
@@ -92,8 +96,6 @@ const inline array2<Score, 6, 64> kPsqTable = {{
 }};
 
 const inline Score kTempo = 10;
-
-struct Position;
 
 struct Evaluation {
   array<Score, 2> piece_value = {};

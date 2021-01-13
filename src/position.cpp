@@ -1,4 +1,5 @@
 #include "position.hpp"
+#include "nn/evaluator.hpp"
 
 using namespace precomputation;
 
@@ -12,10 +13,10 @@ void Position::recompute(int level) {
         occupancy[color] |= pieces[color][type];
         for (auto sq : toSQ(pieces[color][type])) {
           piece_on[color][sq] = type;
-          evaluation.putPiece(color, type, sq);
         }
       }
     }
+    if (evaluator) { evaluator->initialize(*this); }
   }
 
   // init, makeMove, unmakeMove
@@ -230,7 +231,7 @@ void Position::putPiece(Color color, PieceType type, Square sq) {
   pieces[color][type] ^= toBB(sq);
   occupancy[color] ^= toBB(sq);
   piece_on[color][sq] = type;
-  evaluation.putPiece(color, type, sq);
+  if (evaluator) { evaluator->putPiece(color, type, sq); }
 }
 
 void Position::removePiece(Color color, Square sq) {
@@ -239,7 +240,7 @@ void Position::removePiece(Color color, Square sq) {
   pieces[color][type] ^= toBB(sq);
   occupancy[color] ^= toBB(sq);
   piece_on[color][sq] = kNoPieceType;
-  evaluation.removePiece(color, type, sq);
+  if (evaluator) { evaluator->removePiece(color, type, sq); }
 }
 
 void Position::movePiece(Color color, Square from, Square to) {
@@ -334,6 +335,11 @@ void Position::makeMove(const Move& move) {
 
   // Recompute states
   recompute(1);
+
+  // Reset evaluator on king move
+  if (from_type == kKing && evaluator) {
+    evaluator->initialize(*this);
+  }
 }
 
 void Position::unmakeMove(const Move& move) {
@@ -342,8 +348,9 @@ void Position::unmakeMove(const Move& move) {
   game_ply--;
 
   Color own = side_to_move, opp = !own;
+  auto from_type = piece_on[own][move.to];
   auto to_type = state->to_piece_type;
-  assert(piece_on[own][move.to] != kNoPieceType);
+  assert(from_type != kNoPieceType);
 
   //
   // put/remove/move pieces
@@ -380,6 +387,11 @@ void Position::unmakeMove(const Move& move) {
 
   // Recompute states
   recompute(0);
+
+  // Reset evaluator on king move
+  if (from_type == kKing && evaluator) {
+    evaluator->initialize(*this);
+  }
 }
 
 

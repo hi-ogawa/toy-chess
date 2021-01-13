@@ -83,12 +83,3 @@ TEST_CASE("Position::divide") {
   auto expected = "{(a2a3, 380), (b2b3, 420), (c2c3, 420), (d2d3, 539), (e2e3, 599), (f2f3, 380), (g2g3, 420), (h2h3, 380), (a2a4, 420), (b2b4, 421), (c2c4, 441), (d2d4, 560), (e2e4, 600), (f2f4, 401), (g2g4, 421), (h2h4, 420), (b1a3, 400), (b1c3, 440), (g1f3, 440), (g1h3, 400)}";
   CHECK(toString(pos.divide(3)) == expected);
 }
-
-TEST_CASE("Position::evaluate") {
-  precomputation::initializeTables();
-
-  Position pos(kFenInitialPosition);
-  CHECK(pos.evaluate() == kTempo);
-  pos.makeMove(Move(kE2, kE4));
-  CHECK(pos.evaluate() == - (kPsqTable[kPawn][SQ::flipRank(kE4)] - kPsqTable[kPawn][SQ::flipRank(kE2)]) + kTempo);
-}

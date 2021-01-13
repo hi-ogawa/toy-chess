@@ -11,7 +11,7 @@ if(CMAKE_BUILD_TYPE MATCHES Debug)
 endif()
 
 # SIMD
-# add_compile_options(-mavx -mfma)
+add_compile_options(-mavx -mfma)
 
 # Pthread for std::async
 add_link_options(-lpthread)
@@ -29,6 +29,26 @@ include_directories(${CMAKE_CURRENT_BINARY_DIR})
 configure_file(src/config.hpp.in ${CMAKE_CURRENT_BINARY_DIR}/config.hpp @ONLY)
 
 #
+# embedded_weight.cpp (TODO: make it override-able)
+#
+set(NN_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src/nn)
+set(WEIGHT_FILE ${NN_DIR}/data/default.bin)
+set(WEIGHT_FILE_URL https://github.com/hi-ogawa/toy-chess/releases/download/data/default.bin)
+if(NOT EXISTS ${WEIGHT_FILE})
+  message("Downloading a weight file from ${WEIGHT_FILE_URL}")
+  file(DOWNLOAD ${WEIGHT_FILE_URL} ${WEIGHT_FILE} SHOW_PROGRESS)
+endif()
+
+set(EMBEDDED_WEIGHT_CPP ${CMAKE_CURRENT_BINARY_DIR}/embedded_weight.cpp)
+add_custom_command(
+  OUTPUT ${EMBEDDED_WEIGHT_CPP}
+  DEPENDS ${NN_DIR}/embedded_weight.py ${WEIGHT_FILE}
+  COMMAND python ${NN_DIR}/embedded_weight.py ${WEIGHT_FILE} > ${EMBEDDED_WEIGHT_CPP}
+)
+add_custom_target(generate_embedded_weight DEPENDS ${EMBEDDED_WEIGHT_CPP})
+
+
+#
 # Targets
 #
 
@@ -38,9 +58,11 @@ add_library(main_lib
   src/position.cpp
   src/engine.cpp
   src/uci.cpp
-  # src/nn/evaluator.cpp
+  src/nn/evaluator.cpp
+  ${EMBEDDED_WEIGHT_CPP}
 )
 target_precompile_headers(main_lib REUSE_FROM main_pch)
+add_dependencies(main_lib generate_embedded_weight)
 
 # main_test
 add_executable(main_test
@@ -49,7 +71,7 @@ add_executable(main_test
   src/position_test.cpp
   src/engine_test.cpp
   src/uci_test.cpp
-  # src/nn/evaluator_test.cpp
+  src/nn/evaluator_test.cpp
 )
 target_link_libraries(main_test PRIVATE main_lib Catch2WithMain)
 target_precompile_headers(main_test REUSE_FROM main_pch)

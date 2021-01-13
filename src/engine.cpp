@@ -1,32 +1,50 @@
 #include "engine.hpp"
 
 void Engine::stop() {
-  if (!running) { return; }
-  assert(!interrupt);
-  interrupt = 1;
-  std::unique_lock lock(mutex);
-  cv_not_running.wait(lock, [&](){ return !running; });
-  interrupt = 0;
+  if (!isRunning()) { return; }
+  ASSERT(!stop_requested.load(std::memory_order_acquire));
+  stop_requested.store(true, std::memory_order_release);
+  wait();
+  stop_requested.store(false, std::memory_order_release);
 }
 
-void Engine::go(Position& pos, int depth_end) {
-  assert(!running);
-  assert(!interrupt);
-  assert(depth_end >= 1);
+void Engine::wait() {
+  ASSERT(go_thread_future.valid()); // Check Engine::go didn't meet with Engine::wait yet
+  go_thread_future.wait();
+  ASSERT(go_thread_future.get());
+  go_thread_future = {}; // Invalidate future
+}
 
-  running = 1;
+bool Engine::checkSearchLimit() {
+  if (stop_requested.load(std::memory_order_acquire)) { return 0; }
+  if (!time_control.checkLimit()) { return 0; }
+  return 1;
+}
+
+void Engine::go(bool blocking) {
+  ASSERT(!go_thread_future.valid()); // Check previous Engine::go met with Engine::wait
+  go_thread_future = std::async([&]() { goImpl(); return true; });
+  if (blocking) { wait(); }
+}
+
+void Engine::goImpl() {
+  time_control.initialize(go_parameters, position.side_to_move);
+  ASSERT(checkSearchLimit());
+
+  int depth_end = go_parameters.depth;
+  ASSERT(depth_end > 0);
   results.assign(depth_end + 1, {});
 
   // Construct result for depth = 1 so that there always is "bestmove" result.
   int last_depth = 1;
-  results[1] = search(pos, 1);
+  results[1] = search(1);
   results[1].type = kSearchResultInfo;
   search_result_callback(results[1]);
 
-  // Iterative deepening until "interrupt" or reaching "depth_end"
+  // Iterative deepening
   for (int depth = 2; depth <= depth_end; depth++) {
-    auto res = search(pos, depth);
-    if (interrupt) { break; } // Ignore possibly incomplete result
+    auto res = search(depth);
+    if (!checkSearchLimit()) { break; } // Ignore possibly incomplete result
 
     // Save result and send "info ..."
     last_depth = depth;
@@ -39,41 +57,38 @@ void Engine::go(Position& pos, int depth_end) {
   // Send "bestmove ..."
   results[last_depth].type = kSearchResultBestMove;
   search_result_callback(results[last_depth]);
-
-  // Notify "not_running"
-  assert(running);
-  running = 0;
-  cv_not_running.notify_one();
 }
 
-SearchResult Engine::search(Position& pos, int depth) {
+SearchResult Engine::search(int depth) {
   SearchResult res;
   res.depth = depth;
 
   search_state = &search_state_stack[0];
-  res.score = searchImpl(pos, -kScoreInf, kScoreInf, 0, depth);
-  if (interrupt) { return res; }
+  res.score = searchImpl(-kScoreInf, kScoreInf, 0, depth);
 
   res.pv.resize(depth);
-  for (int i = 0; i < depth; i++) { res.pv[i] = search_state->pv[i]; }
+  for (int i = 0; i < depth; i++) {
+    res.pv[i] = search_state->pv[i];
+    if (res.pv[i].type == kNoMoveType) { break; }
+  }
 
   return res;
 }
 
-Score Engine::searchImpl(Position& pos, Score alpha, Score beta, int depth, int depth_end) {
-  if (interrupt) { return 0; }
+Score Engine::searchImpl(Score alpha, Score beta, int depth, int depth_end) {
+  if (!checkSearchLimit()) { return 0; }
 
-  if (depth == depth_end) { return pos.evaluate(); }
+  if (depth == depth_end) { return position.evaluate(); }
   Move best_move;
 
   // Children nodes
-  pos.generateMoves();
-  while (auto move = pos.move_list->getNext()) {
-    pos.makeMove(*move);
+  position.generateMoves();
+  while (auto move = position.move_list->getNext()) {
+    position.makeMove(*move);
     search_state++;
-    auto score = -searchImpl(pos, -beta, -alpha, depth + 1, depth_end);
+    auto score = -searchImpl(-beta, -alpha, depth + 1, depth_end);
     search_state--;
-    pos.unmakeMove(*move);
+    position.unmakeMove(*move);
     if (beta <= score) { return score; } // Beta cut
     if (alpha < score) {
       alpha = score;
@@ -85,8 +100,8 @@ Score Engine::searchImpl(Position& pos, Score alpha, Score beta, int depth, int 
   }
 
   // Leaf node (checkmate or stalemate)
-  if (pos.move_list->size() == 0) {
-    auto score = pos.state->checkers ? -Evaluation::mateScore(depth) : kScoreDraw;
+  if (position.move_list->size() == 0) {
+    auto score = position.state->checkers ? -Evaluation::mateScore(depth) : kScoreDraw;
     if (beta <= score) { return score; } // Beta cut
     if (alpha < score) {
       alpha = score;
