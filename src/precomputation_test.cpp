@@ -5,7 +5,6 @@
 using namespace precomputation;
 
 TEST_CASE("precomputation::getRay") {
-  generateDistanceTable();
   auto expected =
     "X.......\n"
     ".X......\n"
@@ -19,8 +18,6 @@ TEST_CASE("precomputation::getRay") {
 }
 
 TEST_CASE("precomputation::getQueenAttack") {
-  initializeTables();
-
   Square from = kD2;
   Board occ = toBB(kB4) | toBB(kE3) | toBB(kA2) | toBB(kD6);
   Board b = getQueenAttack(from, occ);
@@ -38,8 +35,6 @@ TEST_CASE("precomputation::getQueenAttack") {
 }
 
 TEST_CASE("precomputation::generateNonSlidingAttackTables") {
-  generateDistanceTable();
-  generateNonSlidingAttackTables();
   Square from = kD2;
   {
     auto expected =

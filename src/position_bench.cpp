@@ -3,7 +3,6 @@
 #include <catch2/benchmark/catch_benchmark.hpp>
 
 TEST_CASE("Position::perft") {
-  precomputation::initializeTables();
   Position pos(kFenInitialPosition);
 
   BENCHMARK("perft(5)") {

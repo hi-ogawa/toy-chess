@@ -74,8 +74,6 @@ struct UCITester {
 
 
 TEST_CASE("UCI") {
-  precomputation::initializeTables();
-
   UCITester tester;
 
   CHECK(tester.putAndCheck("uci", {{

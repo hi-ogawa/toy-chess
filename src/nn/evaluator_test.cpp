@@ -6,7 +6,6 @@ TEST_CASE("nn::Evaluator") {
   nn::Evaluator evaluator;
   evaluator.loadEmbeddedWeight();
 
-  precomputation::initializeTables();
   Position pos;
   evaluator.initialize(pos);
   CHECK(std::abs(evaluator.evaluate()) < 70);

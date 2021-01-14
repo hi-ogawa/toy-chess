@@ -19,7 +19,15 @@ namespace precomputation {
   array<Magic, 64> bishop_magic_table = {};
   vector<Board> rook_attack_table = {};
   vector<Board> bishop_attack_table = {};
-  bool is_magic_ready = 0;
+
+  // Auto initialize on startup
+  struct RunOnStartup {
+    RunOnStartup() {
+      // Option to skip it for the purpose of testing
+      if (std::getenv("TOY_NO_PRECOMPUTATION")) { return; }
+      initializeTables();
+    }
+  } run_on_startup;
 
   //
   // Table generation
@@ -177,11 +185,8 @@ namespace precomputation {
   void initializeMagicTables() {
     auto rookAttack = [&](Square sq, Board occ) -> Board { return getRays(sq, kRookDirs, occ); };
     auto bishopAttack = [&](Square sq, Board occ) -> Board { return getRays(sq, kBishopDirs, occ); };
-    if (!is_magic_ready) {
-      generateMagicTable(rook_magic_table, rookAttack);
-      generateMagicTable(bishop_magic_table, bishopAttack);
-      is_magic_ready = 1;
-    }
+    generateMagicTable(rook_magic_table, rookAttack);
+    generateMagicTable(bishop_magic_table, bishopAttack);
     generateMagicAttackTable(rook_magic_table, rook_attack_table, rookAttack);
     generateMagicAttackTable(bishop_magic_table, bishop_attack_table, bishopAttack);
   }

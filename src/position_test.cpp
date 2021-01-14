@@ -3,8 +3,6 @@
 #include <catch2/catch_test_macros.hpp>
 
 TEST_CASE("Position::print") {
-  precomputation::initializeTables();
-
   string fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
   Position pos(fen);
   auto expected =
@@ -32,8 +30,6 @@ TEST_CASE("Position::print") {
 }
 
 TEST_CASE("Position::makeMove") {
-  precomputation::initializeTables();
-
   string fen =    "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
   string fen_e4 = "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1";
   Move move_e4 = Move(kE2, kE4);
@@ -45,8 +41,6 @@ TEST_CASE("Position::makeMove") {
 }
 
 TEST_CASE("Position::generateMoves") {
-  precomputation::initializeTables();
-
   Position pos(kFenInitialPosition);
   auto expected = "{a2a3, b2b3, c2c3, d2d3, e2e3, f2f3, g2g3, h2h3, a2a4, b2b4, c2c4, d2d4, e2e4, f2f4, g2g4, h2h4, b1a3, b1c3, g1f3, g1h3}";
   pos.generateMoves();
@@ -54,8 +48,6 @@ TEST_CASE("Position::generateMoves") {
 }
 
 TEST_CASE("Position::perft") {
-  precomputation::initializeTables();
-
   // Cf. https://www.chessprogramming.org/Perft_Results
   vector<pair<string, array<int64_t, 7>>> cases = {
     {"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",             {{1, 20,  400,  8902,  197281,   4865609, 119060324}}},
@@ -76,8 +68,6 @@ TEST_CASE("Position::perft") {
 }
 
 TEST_CASE("Position::divide") {
-  precomputation::initializeTables();
-
   Position pos(kFenInitialPosition);
   pos.divide(3);
   auto expected = "{(a2a3, 380), (b2b3, 420), (c2c3, 420), (d2d3, 539), (e2e3, 599), (f2f3, 380), (g2g3, 420), (h2h3, 380), (a2a4, 420), (b2b4, 421), (c2c4, 441), (d2d4, 560), (e2e4, 600), (f2f4, 401), (g2g4, 421), (h2h4, 420), (b1a3, 400), (b1c3, 440), (g1f3, 440), (g1h3, 400)}";

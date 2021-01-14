@@ -32,8 +32,7 @@ namespace precomputation {
   extern vector<Board> bishop_attack_table;
   extern bool is_magic_ready;
 
-  // std::getenv("NO_PRECOMPUTATION_INIT")
-  void initializeTables(); // TODO: automatically run on startup (e.g. static struct trick)
+  void initializeTables();
   void generateDistanceTable();
   void generateInBetweenTable();
   void generateNonSlidingAttackTables();
