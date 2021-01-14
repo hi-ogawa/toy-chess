@@ -1,5 +1,31 @@
 #include "engine.hpp"
 
+void SearchResult::print(std::ostream& ostr) const {
+  if (type == kSearchResultInfo) {
+    if (!misc.empty()) {
+      ostr << "info string " << misc;
+
+    } else {
+      int64_t nps = (1000 * num_nodes) / time;
+      ostr << "info"
+           << " depth " << depth
+           << " score cp " << score
+           << " time " << time
+           << " nodes " << num_nodes
+           << " nps " << nps
+           << " pv";
+      for (auto move : pv) {
+        if (move.type == kNoMoveType) { break; }
+        ostr << " " << move;
+      }
+    }
+  }
+
+  if (type == kSearchResultBestMove) {
+    ostr << "bestmove " << pv[0];
+  }
+}
+
 void Engine::print(std::ostream& ostr) {
   ostr << ":: Position" << "\n";
   ostr << position;
@@ -38,6 +64,12 @@ void Engine::goImpl() {
   time_control.initialize(go_parameters, position.side_to_move);
   ASSERT(checkSearchLimit());
 
+  // Send static eval
+  SearchResult info;
+  info.type = kSearchResultInfo;
+  info.misc = "debug eval = " + toString(evaluator.evaluate());
+  search_result_callback(info);
+
   int depth_end = go_parameters.depth;
   ASSERT(depth_end > 0);
   results.assign(depth_end + 1, {});
@@ -71,7 +103,8 @@ SearchResult Engine::search(int depth) {
   res.depth = depth;
 
   search_state = &search_state_stack[0];
-  res.score = searchImpl(-kScoreInf, kScoreInf, 0, depth);
+  res.score = searchImpl(-kScoreInf, kScoreInf, 0, depth, res);
+  res.time = time_control.getDuration() + 1;
 
   res.pv.resize(depth);
   for (int i = 0; i < depth; i++) {
@@ -82,9 +115,10 @@ SearchResult Engine::search(int depth) {
   return res;
 }
 
-Score Engine::searchImpl(Score alpha, Score beta, int depth, int depth_end) {
+Score Engine::searchImpl(Score alpha, Score beta, int depth, int depth_end, SearchResult& result) {
   if (!checkSearchLimit()) { return 0; }
 
+  result.num_nodes++;
   if (depth == depth_end) { return position.evaluate(); }
   Move best_move;
 
@@ -93,7 +127,7 @@ Score Engine::searchImpl(Score alpha, Score beta, int depth, int depth_end) {
   while (auto move = position.move_list->getNext()) {
     position.makeMove(*move);
     search_state++;
-    auto score = -searchImpl(-beta, -alpha, depth + 1, depth_end);
+    auto score = -searchImpl(-beta, -alpha, depth + 1, depth_end, result);
     search_state--;
     position.unmakeMove(*move);
     if (beta <= score) { return score; } // Beta cut

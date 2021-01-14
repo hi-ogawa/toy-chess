@@ -7,9 +7,12 @@ struct SearchResult {
   SearchResultType type = kNoSearchResult;
   int depth = 0;
   Score score = 0;
+  int64_t time = 0;
+  int64_t num_nodes = 0;
   vector<Move> pv;
+  string misc;
 
-  void print(std::ostream& ostr = std::cerr) const { ostr << make_tuple(type, depth, score, pv); }
+  void print(std::ostream& ostr = std::cerr) const;
   friend std::ostream& operator<<(std::ostream& ostr, const SearchResult& self) { self.print(ostr); return ostr; }
 };
 
@@ -26,12 +29,14 @@ struct GoParameters {
 
 struct TimeControl {
   using TimePoint = std::chrono::time_point<std::chrono::steady_clock>;
+  using Msec = std::chrono::milliseconds;
+
   static inline TimePoint now() { return std::chrono::steady_clock::now(); }
   static inline const double kSafeFactor = 0.8;
   static inline const double kInfDuration = 1e12; // 10^12 msec ~ 30 years
 
   TimePoint start;
-  TimePoint finish = now() + std::chrono::milliseconds(int64_t(kInfDuration));
+  TimePoint finish = now() + Msec(int64_t(kInfDuration));
 
   void initialize(const GoParameters& go, Color own) {
     start = now();
@@ -45,10 +50,14 @@ struct TimeControl {
       double cnt = go.movestogo;
       duration = std::min(duration, (time + inc * (cnt - 1)) / cnt);
     }
-    finish = start + std::chrono::milliseconds(int64_t(kSafeFactor * duration));
+    finish = start + Msec(int64_t(kSafeFactor * duration));
   }
 
   bool checkLimit() { return now() < finish; }
+
+  int64_t getDuration() {
+    return std::chrono::duration_cast<Msec>(now() - start).count();
+  }
 };
 
 
@@ -94,7 +103,7 @@ struct Engine {
 
   // Fixed depth alph-beta search (NOTE: Only usable from "go" method)
   SearchResult search(int);
-  Score searchImpl(Score, Score, int, int);
+  Score searchImpl(Score, Score, int, int, SearchResult&);
 
   void load(const string& filename) { evaluator.load(filename); }
 

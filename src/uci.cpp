@@ -77,12 +77,7 @@ void UCI::handleCommand(const string& s_command) {
 }
 
 void UCI::handleSearchResult(const SearchResult& result) {
-  if (result.type == kSearchResultInfo) {
-    print("info " + toString(result));
-  }
-  if (result.type == kSearchResultBestMove) {
-    print("bestmove " + toString(result));
-  }
+  print(result);
 }
 
 void UCI::uci_position(std::istream& command) {

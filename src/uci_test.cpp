@@ -91,11 +91,12 @@ TEST_CASE("UCI") {
   CHECK(tester.putAndCheck("position fen 8/2k5/7R/6R1/8/4K3/8/8 w - - 0 1", {}) == 1);
 
   tester.putLine("go depth 4");
+  CHECK_THAT(tester.getLine(), Contains("info string debug eval ="));
   CHECK_THAT(tester.getLine(), Contains("info"));
   CHECK_THAT(tester.getLine(), Contains("info"));
   CHECK_THAT(tester.getLine(), Contains("info"));
-  CHECK_THAT(tester.getLine(), Contains("info"));
-  CHECK_THAT(tester.getLine(), Contains("bestmove") && Contains("{g5g7, c7b8, h6h8, NONE}"));
+  CHECK_THAT(tester.getLine(), Contains("info") && Contains("pv g5g7 c7b8 h6h8"));
+  CHECK_THAT(tester.getLine(), Contains("bestmove g5g7"));
 
   tester.putLine("quit");
   CHECK(tester.waitFor(std::chrono::milliseconds(100)) == std::future_status::ready);
