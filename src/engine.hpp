@@ -78,8 +78,9 @@ struct Engine {
   array<SearchState, Position::kMaxDepth> search_state_stack;
 
   Engine() {
-    position.evaluator = &evaluator;
     evaluator.loadEmbeddedWeight();
+    position.evaluator = &evaluator;
+    position.reset();
   }
 
   // "go" and "stop/wait" should be called from different threads
@@ -96,4 +97,6 @@ struct Engine {
   Score searchImpl(Score, Score, int, int);
 
   void load(const string& filename) { evaluator.load(filename); }
+
+  void print(std::ostream&);
 };

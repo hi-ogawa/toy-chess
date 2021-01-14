@@ -8,9 +8,6 @@
 
 namespace nn {
 
-// Default weight file path
-inline constexpr const char* kDefaultWeightFile = "src/nn/data/default.bin";
-
 // Constants from main.py
 inline constexpr int WIDTH1 = 10 * 64 * 64;
 inline constexpr int WIDTH2 = 128;

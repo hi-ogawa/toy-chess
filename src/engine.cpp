@@ -1,5 +1,12 @@
 #include "engine.hpp"
 
+void Engine::print(std::ostream& ostr) {
+  ostr << ":: Position" << "\n";
+  ostr << position;
+  ostr << ":: Evaluation" << "\n";
+  ostr << evaluator.evaluate() << "\n";
+}
+
 void Engine::stop() {
   if (!isRunning()) { return; }
   ASSERT(!stop_requested.load(std::memory_order_acquire));

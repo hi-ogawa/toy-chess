@@ -67,8 +67,12 @@ void UCI::handleCommand(const string& s_command) {
   if (token == "go")         { uci_go(command); } else
   if (token == "stop")       { uci_stop(command); } else
   if (token == "ponderhit")  { uci_ponderhit(command); }
+
+  // Custom commands
+  else if (token == "toy-debug") { engine.stop(); engine.print(err_ostr); }
+
   else {
-    printError("Unknown command - " + token);
+    printError("Unknown command [" + token + "]");
   }
 }
 

@@ -57,14 +57,12 @@ struct UCI {
     print("uciok");
   }
 
-  void uci_debug(std::istream& command) {
-    // debug [ on | off ]
-    auto token = readToken(command);
-    assert(token == "on" || token == "off");
+  void uci_debug(std::istream&) {
     printError("Unsupported command");
   }
 
   void uci_isready(std::istream&) {
+    engine.stop();
     print("readyok");
   }
 
