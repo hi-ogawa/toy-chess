@@ -1,17 +1,18 @@
-Building and Testing
+Build and Run
 
 ```
-CC=clang CXX=clang++ LDFLAGS=-fuse-ld=lld cmake -B build/Debug -DCMAKE_BUILD_TYPE=Debug
-cmake --build build/Debug
-./build/Debug/main_test
+python script.py init --clang --build-type Release
+python script.py run
+```
 
-CC=clang CXX=clang++ LDFLAGS=-fuse-ld=lld cmake -B build/Release -DCMAKE_BUILD_TYPE=Release
-cmake --build build/Release
-./build/Release/main_test
+Test
+
+```
+python script.py run --e main_test -- -s
 ```
 
 Benchmark
 
 ```
-./build/Release/main_bench --benchmark-samples 5
+python script.py run --e main_bench -- --benchmark-samples 5
 ```
