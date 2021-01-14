@@ -102,6 +102,7 @@ SearchResult Engine::search(int depth) {
   SearchResult res;
   res.depth = depth;
 
+  position.reset(); // TODO: this stack reset shouldn't be necessary, but move generation fails without this.
   search_state = &search_state_stack[0];
   res.score = searchImpl(-kScoreInf, kScoreInf, 0, depth, res);
   res.time = time_control.getDuration() + 1;
@@ -139,6 +140,7 @@ Score Engine::searchImpl(Score alpha, Score beta, int depth, int depth_end, Sear
       }
     }
   }
+  if (!checkSearchLimit()) { return 0; }
 
   // Leaf node (checkmate or stalemate)
   if (position.move_list->size() == 0) {

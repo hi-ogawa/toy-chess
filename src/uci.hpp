@@ -89,4 +89,7 @@ struct UCI {
   void uci_ponderhit(std::istream&) {
     printError("Unsupported command");
   }
+
+  void toy_debug(std::istream&);
+  void toy_perft(std::istream&);
 };

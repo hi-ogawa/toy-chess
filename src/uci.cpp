@@ -69,7 +69,8 @@ void UCI::handleCommand(const string& s_command) {
   if (token == "ponderhit")  { uci_ponderhit(command); }
 
   // Custom commands
-  else if (token == "toy-debug") { engine.stop(); engine.print(err_ostr); }
+  else if (token == "toy-debug") { toy_debug(command); }
+  else if (token == "toy-perft") { toy_perft(command); }
 
   else {
     printError("Unknown command [" + token + "]");
@@ -143,4 +144,28 @@ void UCI::uci_go(std::istream& command) {
   }
 
   engine.go(/* blocking */ false);
+}
+
+void UCI::toy_debug(std::istream&) {
+  engine.stop();
+  engine.print(ostr);
+}
+
+void UCI::toy_perft(std::istream& command) {
+  engine.stop();
+  engine.position.evaluator = nullptr;
+  int depth = 1;
+  command >> depth;
+  auto start = std::chrono::steady_clock::now();
+  auto result = engine.position.divide(depth);
+  auto finish = std::chrono::steady_clock::now();
+  float time = (float)std::chrono::duration_cast<std::chrono::milliseconds>(finish - start).count() / 1000;
+  int64_t total = 0;
+  for (auto [move, cnt] : result) {
+    ostr << move << ": " << cnt << "\n";
+    total += cnt;
+  }
+  ostr << "total: " << total << "\n";
+  ostr << "time: " << std::fixed << std::setprecision(3) << time << "\n";
+  engine.position.evaluator = &engine.evaluator;
 }
