@@ -1,0 +1,37 @@
+name: Match
+on:
+  workflow_dispatch:
+    inputs:
+      rounds:
+        description: Number of rounds
+        required: true
+        default: 10
+      sf_elo:
+        description: Stockfish ELO
+        required: true
+        default: 1500
+jobs:
+  match:
+    name: Match
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: true
+      - uses: actions/setup-python@v2
+      - name: Install tools
+        run: sudo apt-get install cmake clang tar qt5-default
+      - name: Download cutechess-cli
+        run: wget -P misc https://github.com/cutechess/cutechess/releases/download/1.2.0/cutechess-cli-1.2.0-linux64.tar.gz && tar -xz -f misc/cutechess-cli-1.2.0-linux64.tar.gz -C misc
+      - name: Download opening book
+        run: wget -P misc https://github.com/official-stockfish/books/raw/master/8moves_v3.pgn.zip && unzip -d misc misc/8moves_v3.pgn.zip
+      - name: Build toy-chess
+        run: python script.py init --clang && python script.py build
+      - name: Build stockfish
+        run: make -C thirdparty/Stockfish/src -j build
+      - name: === Match ===
+        run: CLI=misc/cutechess-cli/cutechess-cli.sh ROUNDS=${{ github.event.inputs.rounds }} SF_ELO=${{ github.event.inputs.sf_elo }} bash misc/match.sh
+      - uses: actions/upload-artifact@v2
+        with:
+          name: match-results
+          path: misc/match-*.pgn
