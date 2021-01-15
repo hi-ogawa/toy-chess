@@ -30,7 +30,7 @@ void SearchResult::print(std::ostream& ostr) const {
            << " nps " << nps
            << " pv";
       for (auto move : pv) {
-        if (move.type == kNoMoveType) { break; }
+        if (move.type() == kNoMoveType) { break; }
         ostr << " " << move;
       }
     }
@@ -117,7 +117,6 @@ SearchResult Engine::search(int depth) {
   SearchResult res;
   res.depth = depth;
 
-  position.reset(); // TODO: this stack reset shouldn't be necessary, but move generation fails without this.
   search_state = &search_state_stack[0];
   res.score = searchImpl(-kScoreInf, kScoreInf, 0, depth, res);
   res.time = time_control.getTime() + 1;
@@ -125,7 +124,7 @@ SearchResult Engine::search(int depth) {
   res.pv.resize(depth);
   for (int i = 0; i < depth; i++) {
     res.pv[i] = search_state->pv[i];
-    if (res.pv[i].type == kNoMoveType) { break; }
+    if (res.pv[i].type() == kNoMoveType) { break; }
   }
 
   return res;
@@ -163,7 +162,7 @@ Score Engine::searchImpl(Score alpha, Score beta, int depth, int depth_end, Sear
     if (beta <= score) { return score; } // Beta cut
     if (alpha < score) {
       alpha = score;
-      best_move.type = kNoMoveType;
+      best_move = Move();
     }
   }
 

@@ -1,38 +1,10 @@
 #pragma once
 
 #include "base.hpp"
+#include "move.hpp"
 #include "precomputation.hpp"
 #include "transposition_table.hpp"
 #include "nn/evaluator.hpp"
-
-//
-// Move
-//
-
-enum MoveType { kNormal, kCastling, kPromotion, kEnpassant, kNoMoveType };
-
-struct Move {
-  Square from = 0;
-  Square to = 0;
-  MoveType type = kNoMoveType;
-  PieceType promotion_type;
-  CastlingSide castling_side;
-  Move() {}
-  Move(Square from, Square to, MoveType type = kNormal) : from{from}, to{to}, type{type} {}
-
-  Square getEnpassantCapturedSquare() const {
-    assert(type == kEnpassant);
-    return SQ::fromCoords(to % 8, from / 8);
-  }
-
-  void print(std::ostream& ostr = std::cerr) const {
-    if (type == kNoMoveType) { ostr << "NONE"; return; }
-    ostr << SQ(from) << SQ(to);
-    if (type == kPromotion) { ostr << kFenPiecesMappingInverse[1][promotion_type]; }
-  }
-
-  friend std::ostream& operator<<(std::ostream& ostr, const Move& self) { self.print(ostr); return ostr; }
-};
 
 //
 // Position

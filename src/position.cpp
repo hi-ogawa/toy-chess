@@ -271,8 +271,8 @@ void Position::makeMove(const Move& move) {
   pushState();
 
   Color own = side_to_move, opp = !own;
-  auto from_type = piece_on[own][move.from];
-  auto to_type = state->to_piece_type = piece_on[opp][move.to];
+  auto from_type = piece_on[own][move.from()];
+  auto to_type = state->to_piece_type = piece_on[opp][move.to()];
   assert(from_type != kNoPieceType);
 
   //
@@ -281,30 +281,30 @@ void Position::makeMove(const Move& move) {
 
   if (to_type != kNoPieceType) { // Capture except en passant (thus, this includes promotion)
     assert(to_type != kKing);
-    removePiece(opp, move.to);
+    removePiece(opp, move.to());
   }
 
-  if (move.type == kNormal) {
-    movePiece(own, move.from, move.to);
+  if (move.type() == kNormal) {
+    movePiece(own, move.from(), move.to());
   }
 
-  if (move.type == kCastling) {
-    auto [king_from, king_to, rook_from, rook_to] = kCastlingMoves[own][move.castling_side];
+  if (move.type() == kCastling) {
+    auto [king_from, king_to, rook_from, rook_to] = kCastlingMoves[own][move.castlingSide()];
     assert(piece_on[own][king_from] == kKing      && piece_on[own][rook_from] == kRook);
     assert(piece_on[own][king_to] == kNoPieceType && piece_on[own][rook_to] == kNoPieceType);
     movePiece(own, king_from, king_to);
     movePiece(own, rook_from, rook_to);
   }
 
-  if (move.type == kPromotion) {
-    removePiece(own, move.from);
-    putPiece(own, move.promotion_type, move.to);
+  if (move.type() == kPromotion) {
+    removePiece(own, move.from());
+    putPiece(own, move.promotionType(), move.to());
   }
 
-  if (move.type == kEnpassant) {
-    auto sq = move.getEnpassantCapturedSquare();
+  if (move.type() == kEnpassant) {
+    auto sq = move.capturedPawnSquare();
     assert(piece_on[opp][sq] == kPawn);
-    movePiece(own, move.from, move.to);
+    movePiece(own, move.from(), move.to());
     removePiece(opp, sq);
   }
 
@@ -321,7 +321,7 @@ void Position::makeMove(const Move& move) {
   }
   if (from_type == kRook) {
     for (auto side : {kOO, kOOO}) {
-      if (state->castling_rights[own][side] && move.from == kCastlingMoves[own][side][2]) {
+      if (state->castling_rights[own][side] && move.from() == kCastlingMoves[own][side][2]) {
         state->castling_rights[own][side] = 0;
         state->key ^= Zobrist::castling_rights[own][side];
       }
@@ -329,7 +329,7 @@ void Position::makeMove(const Move& move) {
   }
   if (to_type == kRook) {
     for (auto side : {kOO, kOOO}) {
-      if (state->castling_rights[opp][side] && move.to == kCastlingMoves[opp][side][2]) {
+      if (state->castling_rights[opp][side] && move.to() == kCastlingMoves[opp][side][2]) {
         state->castling_rights[opp][side] = 0;
         state->key ^= Zobrist::castling_rights[opp][side];
       }
@@ -339,8 +339,8 @@ void Position::makeMove(const Move& move) {
   //
   // En passant square
   //
-  if (from_type == kPawn && std::abs(move.to - move.from) == 2 * kDirN) {
-    Square sq = (move.to + move.from) / 2;
+  if (from_type == kPawn && std::abs(move.to() - move.from()) == 2 * kDirN) {
+    Square sq = (move.to() + move.from()) / 2;
     state->ep_square = toBB(sq);
     state->key ^= Zobrist::ep_squares[sq];
   } else {
@@ -351,7 +351,7 @@ void Position::makeMove(const Move& move) {
   // 50 move rule
   //
   state->rule50++;
-  if ((to_type != kNoPieceType) || (from_type == kPawn) || (move.type != kNormal)) {
+  if ((to_type != kNoPieceType) || (from_type == kPawn) || (move.type() != kNormal)) {
     state->rule50 = 0;
   }
 
@@ -375,7 +375,7 @@ void Position::unmakeMove(const Move& move) {
   game_ply--;
 
   Color own = side_to_move, opp = !own;
-  auto from_type = piece_on[own][move.to];
+  auto from_type = piece_on[own][move.to()];
   auto to_type = state->to_piece_type;
   assert(from_type != kNoPieceType);
 
@@ -385,28 +385,28 @@ void Position::unmakeMove(const Move& move) {
 
   if (to_type != kNoPieceType) {
     assert(to_type != kKing);
-    putPiece(opp, to_type, move.to);
+    putPiece(opp, to_type, move.to());
   }
 
-  if (move.type == kNormal) {
-    movePiece(own, move.to, move.from);
+  if (move.type() == kNormal) {
+    movePiece(own, move.to(), move.from());
   }
 
-  if (move.type == kCastling) {
-    auto [king_from, king_to, rook_from, rook_to] = kCastlingMoves[own][move.castling_side];
+  if (move.type() == kCastling) {
+    auto [king_from, king_to, rook_from, rook_to] = kCastlingMoves[own][move.castlingSide()];
     movePiece(own, king_to, king_from);
     movePiece(own, rook_to, rook_from);
   }
 
-  if (move.type == kPromotion) {
-    removePiece(own, move.to);
-    putPiece(own, kPawn, move.from);
+  if (move.type() == kPromotion) {
+    removePiece(own, move.to());
+    putPiece(own, kPawn, move.from());
   }
 
-  if (move.type == kEnpassant) {
-    auto sq = move.getEnpassantCapturedSquare();
+  if (move.type() == kEnpassant) {
+    auto sq = move.capturedPawnSquare();
     putPiece(opp, kPawn, sq);
-    movePiece(own, move.to, move.from);
+    movePiece(own, move.to(), move.from());
   }
 
   // Restore irreversible state (castling rights, en passant square, rule50)
@@ -427,6 +427,8 @@ void Position::unmakeMove(const Move& move) {
 //
 
 void Position::generateMoves() {
+  move_list->initialize(this);
+
   Color own = side_to_move, opp = !own;
   Board& occ = occupancy[kBoth];
   Board& own_occ = occupancy[own];
@@ -456,8 +458,7 @@ void Position::generateMoves() {
       for (auto to : toSQ(push1 & kBackrankBB[opp])) { // Promotion
         auto from = to - kPawnPushDirs[own];
         for (auto type : {kKnight, kBishop, kRook, kQueen}) {
-          Move move(from, to, kPromotion);
-          move.promotion_type = type;
+          Move move(from, to, kPromotion, type);
           move_list->insert(move);
         }
       }
@@ -475,8 +476,7 @@ void Position::generateMoves() {
         Board capture = pawn_attack_table[own][from] & opp_occ & target;
         for (auto to : toSQ(capture & kBackrankBB[opp])) { // Promotion
           for (auto type : {kKnight, kBishop, kRook, kQueen}) {
-            Move move(from, to, kPromotion);
-            move.promotion_type = type;
+            Move move(from, to, kPromotion, type);
             move_list->insert(move);
           }
         }
@@ -535,7 +535,6 @@ void Position::generateMoves() {
       auto [king_from, king_to, rook_from, rook_to] = kCastlingMoves[own][side];
       if (in_between_table[king_from][rook_from] & occ) { continue; }
       Move move(king_from, king_to, kCastling);
-      move.castling_side = side;
       move_list->insert(move);
     }
   }
@@ -545,7 +544,7 @@ bool Position::isLegal(const Move& move) const {
   Color own = side_to_move;
 
   Square king_sq = kingSQ(own);
-  bool is_king_move = (piece_on[own][move.from] == kKing);
+  bool is_king_move = (piece_on[own][move.from()] == kKing);
 
   //
   // Check evasion
@@ -554,20 +553,20 @@ bool Position::isLegal(const Move& move) const {
   if (state->checkers) {
     int num_checkers = toSQ(state->checkers).size();
 
-    if (move.type == kCastling) { return 0; }
+    if (move.type() == kCastling) { return 0; }
 
     // King's move
-    if (is_king_move) { return !getAttackers(own, move.to, toBB(move.from)); }
+    if (is_king_move) { return !getAttackers(own, move.to(), toBB(move.from())); }
 
     // Multiple check but not king move
     if (num_checkers >= 2) { return 0; }
 
     // Single check
     auto checker_sq = toSQ(state->checkers).front();
-    if (isPinned(own, king_sq, move.from, move.to, toBB(move.from))) { return 0; } // TODO: Can we use "state->blockers"?
-    if (move.to == checker_sq) { return 1; } // capture
-    if (move.type == kEnpassant && checker_sq == move.getEnpassantCapturedSquare()) { return 1; } // Enpassant capture
-    if (in_between_table[king_sq][checker_sq] & toBB(move.to)) { return 1; } // blocking
+    if (isPinned(own, king_sq, move.from(), move.to(), toBB(move.from()))) { return 0; } // TODO: Can we use "state->blockers"?
+    if (move.to() == checker_sq) { return 1; } // capture
+    if (move.type() == kEnpassant && checker_sq == move.capturedPawnSquare()) { return 1; } // Enpassant capture
+    if (in_between_table[king_sq][checker_sq] & toBB(move.to())) { return 1; } // blocking
     return 0;
   }
 
@@ -576,8 +575,8 @@ bool Position::isLegal(const Move& move) const {
   //
 
   // Castling path is attacked
-  if (move.type == kCastling) {
-    auto [king_from, king_to, _0, _1] = kCastlingMoves[own][move.castling_side];
+  if (move.type() == kCastling) {
+    auto [king_from, king_to, _0, _1] = kCastlingMoves[own][move.castlingSide()];
     for (auto sq : toSQ(in_between_table[king_from][king_to] | toBB(king_to))) {
       if (getAttackers(own, sq)) { return 0; }
     }
@@ -585,20 +584,20 @@ bool Position::isLegal(const Move& move) const {
   }
 
   // Pinned enpassant
-  if (move.type == kEnpassant) {
-    Square opp_sq = move.getEnpassantCapturedSquare();
-    Board removed = toBB(move.from) | toBB(opp_sq);
-    if (isPinned(own, king_sq, move.from, move.to, removed)) { return 0; }
-    if (isPinned(own, king_sq, opp_sq,    move.to, removed)) { return 0; }
+  if (move.type() == kEnpassant) {
+    Square opp_sq = move.capturedPawnSquare();
+    Board removed = toBB(move.from()) | toBB(opp_sq);
+    if (isPinned(own, king_sq, move.from(), move.to(), removed)) { return 0; }
+    if (isPinned(own, king_sq, opp_sq,      move.to(), removed)) { return 0; }
     return 1;
   }
 
   // King's move
-  if (is_king_move) { return !getAttackers(own, move.to); }
+  if (is_king_move) { return !getAttackers(own, move.to()); }
 
   // Pinned piece move
-  if (state->blockers & toBB(move.from)) {
-    return SQ::isAligned(king_sq, move.from, move.to);
+  if (state->blockers & toBB(move.from())) {
+    return SQ::isAligned(king_sq, move.from(), move.to());
   }
 
   return 1;
