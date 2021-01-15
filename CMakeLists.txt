@@ -11,7 +11,10 @@ if(CMAKE_BUILD_TYPE MATCHES Debug)
 endif()
 
 # SIMD
-add_compile_options(-mavx -mfma)
+option(USE_SIMD "Use SIMD" ON)
+if(${USE_SIMD})
+  add_compile_options(-mavx -mfma)
+endif()
 
 # Pthread for std::async
 add_link_options(-lpthread)

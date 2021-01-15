@@ -1,5 +1,6 @@
 #pragma once
 
-#include <string_view>
+#cmakedefine USE_SIMD
 
+#include <string_view>
 constexpr std::string_view kBuildType = "@CMAKE_BUILD_TYPE@";
