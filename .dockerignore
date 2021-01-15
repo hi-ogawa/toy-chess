@@ -1,0 +1,14 @@
+# src
+src/nn/data/*
+!src/nn/data/default.bin
+
+# misc
+misc
+!misc/bot/config.yml
+
+# thirdparty
+thirdparty/Stockfish
+
+# others
+build
+.venv
