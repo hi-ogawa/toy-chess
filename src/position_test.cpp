@@ -25,6 +25,7 @@ TEST_CASE("Position::print") {
     "+---+---+---+---+---+---+---+---+\n"
     "  a   b   c   d   e   f   g   h  \n"
     "\n"
+    "Key: 0x1754e78c\n"
     "Fen: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1\n";
   CHECK(toString(pos) == expected);
 }
@@ -72,4 +73,15 @@ TEST_CASE("Position::divide") {
   pos.divide(3);
   auto expected = "{(a2a3, 380), (b2b3, 420), (c2c3, 420), (d2d3, 539), (e2e3, 599), (f2f3, 380), (g2g3, 420), (h2h3, 380), (a2a4, 420), (b2b4, 421), (c2c4, 441), (d2d4, 560), (e2e4, 600), (f2f4, 401), (g2g4, 421), (h2h4, 420), (b1a3, 400), (b1c3, 440), (g1f3, 440), (g1h3, 400)}";
   CHECK(toString(pos.divide(3)) == expected);
+}
+
+TEST_CASE("Position::State::key") {
+  Position pos;
+  auto key1 = pos.state->key;
+  pos.makeMove(Move(kE2, kE4));
+  auto key2 = pos.state->key;
+  pos.unmakeMove(Move(kE2, kE4));
+  auto key3 = pos.state->key;
+  CHECK(key1 != key2);
+  CHECK(key1 == key3);
 }

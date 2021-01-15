@@ -13,6 +13,20 @@ void Position::recompute(int level) {
         occupancy[color] |= pieces[color][type];
         for (auto sq : toSQ(pieces[color][type])) {
           piece_on[color][sq] = type;
+          state->key ^= Zobrist::piece_squares[color][type][sq];
+        }
+      }
+    }
+    if (side_to_move) {
+      state->key ^= Zobrist::side_to_move;
+    }
+    if (state->ep_square) {
+      state->key ^= Zobrist::ep_squares[toSQ(state->ep_square).front()];
+    }
+    for (Color i = 0; i < 2; i++) {
+      for (CastlingSide j = 0; j < 2; j++) {
+        if (state->castling_rights[i][j]) {
+          state->key ^= Zobrist::castling_rights[i][j];
         }
       }
     }
@@ -164,6 +178,7 @@ void Position::print(std::ostream& ostr) const {
   ostr << "+---+---+---+---+---+---+---+---+" << "\n";
   ostr << "  a   b   c   d   e   f   g   h  " << "\n";
   ostr << "\n";
+  ostr << "Key: "; Zobrist::print(state->key, ostr); ostr << "\n";
   ostr << "Fen: "; printFen(ostr);
   ostr << "\n";
 }
@@ -231,6 +246,7 @@ void Position::putPiece(Color color, PieceType type, Square sq) {
   pieces[color][type] ^= toBB(sq);
   occupancy[color] ^= toBB(sq);
   piece_on[color][sq] = type;
+  state->key ^= Zobrist::piece_squares[color][type][sq];
   if (evaluator) { evaluator->putPiece(color, type, sq); }
 }
 
@@ -240,6 +256,7 @@ void Position::removePiece(Color color, Square sq) {
   pieces[color][type] ^= toBB(sq);
   occupancy[color] ^= toBB(sq);
   piece_on[color][sq] = kNoPieceType;
+  state->key ^= Zobrist::piece_squares[color][type][sq];
   if (evaluator) { evaluator->removePiece(color, type, sq); }
 }
 
@@ -295,12 +312,18 @@ void Position::makeMove(const Move& move) {
   // Castling rights
   //
   if (from_type == kKing) {
-    state->castling_rights[own][kOO] = state->castling_rights[own][kOOO] = 0;
+    for (auto side : {kOO, kOOO}) {
+      if (state->castling_rights[own][side]) {
+        state->castling_rights[own][side] = 0;
+        state->key ^= Zobrist::castling_rights[own][side];
+      }
+    }
   }
   if (from_type == kRook) {
     for (auto side : {kOO, kOOO}) {
       if (state->castling_rights[own][side] && move.from == kCastlingMoves[own][side][2]) {
         state->castling_rights[own][side] = 0;
+        state->key ^= Zobrist::castling_rights[own][side];
       }
     }
   }
@@ -308,6 +331,7 @@ void Position::makeMove(const Move& move) {
     for (auto side : {kOO, kOOO}) {
       if (state->castling_rights[opp][side] && move.to == kCastlingMoves[opp][side][2]) {
         state->castling_rights[opp][side] = 0;
+        state->key ^= Zobrist::castling_rights[opp][side];
       }
     }
   }
@@ -316,7 +340,9 @@ void Position::makeMove(const Move& move) {
   // En passant square
   //
   if (from_type == kPawn && std::abs(move.to - move.from) == 2 * kDirN) {
-    state->ep_square = toBB((move.to + move.from) / 2);
+    Square sq = (move.to + move.from) / 2;
+    state->ep_square = toBB(sq);
+    state->key ^= Zobrist::ep_squares[sq];
   } else {
     state->ep_square = 0;
   }
@@ -332,6 +358,7 @@ void Position::makeMove(const Move& move) {
   // Reversible states
   side_to_move = opp;
   game_ply++;
+  state->key ^= Zobrist::side_to_move;
 
   // Recompute states
   recompute(1);

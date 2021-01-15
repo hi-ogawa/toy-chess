@@ -2,6 +2,7 @@
 
 #include "base.hpp"
 #include "precomputation.hpp"
+#include "transposition_table.hpp"
 #include "nn/evaluator.hpp"
 
 //
@@ -54,6 +55,8 @@ struct Position {
     PieceType to_piece_type = kNoPieceType;
     Board checkers = 0;
     Board blockers = 0;
+
+    Zobrist::Key key = 0;
   };
 
   State* state = nullptr;

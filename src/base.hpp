@@ -12,7 +12,7 @@ enum { kWhite, kBlack, kBoth };
 using PieceType = int;
 enum { kPawn, kKnight, kBishop, kRook, kQueen, kKing, kNoPieceType };
 
-using CastlingSide = bool;
+using CastlingSide = int;
 enum { kOO, kOOO };
 
 using File = int;
