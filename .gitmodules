@@ -4,3 +4,6 @@
 [submodule "thirdparty/Stockfish"]
 	path = thirdparty/Stockfish
 	url = git@github.com:nodchip/Stockfish.git
+[submodule "thirdparty/lichess-bot"]
+	path = thirdparty/lichess-bot
+	url = git@github.com:ShailChoksi/lichess-bot.git
