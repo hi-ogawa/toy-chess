@@ -38,7 +38,7 @@ drive.mount('/content/gdrive', force_remount=True)
 # Download source code
 %cd /content
 !rm -rf toy-chess
-!git clone --single-branch --branch nn-training https://github.com/hi-ogawa/toy-chess.git
+!git clone https://github.com/hi-ogawa/toy-chess.git
 %cd /content/toy-chess
 
 # Build "nn_preprocess"

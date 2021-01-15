@@ -21,7 +21,7 @@ struct GoParameters {
   // Time unit is millisecond
   array<int64_t, 2> time = {0, 0};
   array<int64_t, 2> inc = {0, 0};
-  int64_t movestogo = 1;
+  int64_t movestogo = 0;
   int64_t movetime = 0;
   int depth = Position::kMaxDepth;
 };
@@ -32,32 +32,15 @@ struct TimeControl {
   using Msec = std::chrono::milliseconds;
 
   static inline TimePoint now() { return std::chrono::steady_clock::now(); }
-  static inline const double kSafeFactor = 0.8;
+  static inline const double kSafeFactor = 0.9;
   static inline const double kInfDuration = 1e12; // 10^12 msec ~ 30 years
 
   TimePoint start;
   TimePoint finish = now() + Msec(int64_t(kInfDuration));
 
-  void initialize(const GoParameters& go, Color own) {
-    start = now();
-    double duration = kInfDuration;
-    if (go.movetime != 0) {
-      duration = std::min(duration, (double)go.movetime);
-    }
-    if (go.time[own] != 0) {
-      double time = go.time[own];
-      double inc = go.inc[own];
-      double cnt = go.movestogo;
-      duration = std::min(duration, (time + inc * (cnt - 1)) / cnt);
-    }
-    finish = start + Msec(int64_t(kSafeFactor * duration));
-  }
-
+  void initialize(const GoParameters&, Color, int);
   bool checkLimit() { return now() < finish; }
-
-  int64_t getDuration() {
-    return std::chrono::duration_cast<Msec>(now() - start).count();
-  }
+  int64_t getTime() { return std::chrono::duration_cast<Msec>(now() - start).count(); }
 };
 
 

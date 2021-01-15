@@ -58,7 +58,7 @@ struct UCI {
   }
 
   void uci_debug(std::istream&) {
-    printError("Unsupported command");
+    printError("Unsupported command [debug]");
   }
 
   void uci_isready(std::istream&) {
@@ -66,17 +66,19 @@ struct UCI {
     print("readyok");
   }
 
-  void uci_setoption(std::istream&) {
+  void uci_setoption(std::istream& command) {
     // setoption name <id> [value <x>]
-    printError("Unsupported command");
+    ASSERT(readToken(command) == "name");
+    auto id = readToken(command);
+    printError("Unsupported command [setoption " + id + "]");
   }
 
   void uci_register(std::istream&) {
-    printError("Unsupported command");
+    printError("Unsupported command [register]");
   }
 
   void uci_ucinewgame(std::istream&) {
-    printError("Unsupported command");
+    printError("Unsupported command [ucinewgame]");
   }
 
   void uci_position(std::istream&);
@@ -87,7 +89,7 @@ struct UCI {
   }
 
   void uci_ponderhit(std::istream&) {
-    printError("Unsupported command");
+    printError("Unsupported command [ponderhit]");
   }
 
   void toy_debug(std::istream&);

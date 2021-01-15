@@ -1,5 +1,20 @@
 #include "engine.hpp"
 
+void TimeControl::initialize(const GoParameters& go, Color own, int ply) {
+  start = now();
+  double duration = kInfDuration;
+  if (go.movetime != 0) {
+    duration = std::min(duration, (double)go.movetime);
+  }
+  if (go.time[own] != 0) {
+    double time = go.time[own];
+    double inc = go.inc[own];
+    int cnt = go.movestogo ? go.movestogo : std::max(10, 50 - ply / 2);
+    duration = std::min(duration, (time + inc * (cnt - 1)) / cnt); // Split remaining time to each move
+  }
+  finish = start + Msec(int64_t(kSafeFactor * duration));
+};
+
 void SearchResult::print(std::ostream& ostr) const {
   if (type == kSearchResultInfo) {
     if (!misc.empty()) {
@@ -61,7 +76,7 @@ void Engine::go(bool blocking) {
 }
 
 void Engine::goImpl() {
-  time_control.initialize(go_parameters, position.side_to_move);
+  time_control.initialize(go_parameters, position.side_to_move, position.game_ply);
   ASSERT(checkSearchLimit());
 
   // Send static eval
@@ -105,7 +120,7 @@ SearchResult Engine::search(int depth) {
   position.reset(); // TODO: this stack reset shouldn't be necessary, but move generation fails without this.
   search_state = &search_state_stack[0];
   res.score = searchImpl(-kScoreInf, kScoreInf, 0, depth, res);
-  res.time = time_control.getDuration() + 1;
+  res.time = time_control.getTime() + 1;
 
   res.pv.resize(depth);
   for (int i = 0; i < depth; i++) {

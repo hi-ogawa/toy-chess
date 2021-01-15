@@ -1,7 +1,7 @@
 Build and Run
 
 ```
-python script.py init --clang --build-type Release
+python script.py init --clang # Add "--b Debug" for debug build
 python script.py run
 ```
 
