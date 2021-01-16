@@ -4,12 +4,14 @@ TIMESTAMP=$(date '+%F-%H-%M-%S')
 
 CLI=${CLI:-"cutechess-cli"}
 
+CONCURRENCY=${CONCURRENCY:-2}
 ROUNDS=${ROUNDS:-5}
 TC=${TC:-"1/1+0.0"}
 DRAW=${DRAW:-"-draw movenumber=40 movecount=4 score=10"}
 RESIGN=${RESIGN:-"-resign movecount=4 score=1000"}
 RESULT=${RESULT:-"-pgnout misc/match-$TIMESTAMP.pgn"}
 OPENINGS=${OPENINGS:-"-openings file=misc/8moves_v3.pgn policy=round -repeat"}
+MORE_OPTIONS=${MORE_OPTIONS} # For "-debug" etc...
 
 SF_ELO=${SF_ELO:-1500}
 
@@ -19,7 +21,7 @@ ENGINE2=${ENGINE2:-"tc=$TC name=stockfish cmd=stockfish dir=thirdparty/Stockfish
 set -x
 $CLI \
   -tournament round-robin \
-  -concurrency 2 \
+  -concurrency $CONCURRENCY \
   -engine $ENGINE1 -engine $ENGINE2 -each proto=uci \
   -rounds $ROUNDS -games 2 \
-  $OPENINGS $DRAW $RESIGN $RESULT
+  $OPENINGS $DRAW $RESIGN $RESULT $MORE_OPTIONS

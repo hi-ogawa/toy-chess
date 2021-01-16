@@ -134,38 +134,114 @@ Score Engine::searchImpl(Score alpha, Score beta, int depth, int depth_end, Sear
   if (!checkSearchLimit()) { return 0; }
 
   result.num_nodes++;
-  if (depth == depth_end) { return position.evaluate(); }
-  Move best_move;
+  if (depth == depth_end) { return position.evaluate(); } // TODO: Save to tt_entry.score
 
-  // Children nodes
-  position.generateMoves();
-  while (auto move = position.move_list->getNext()) {
-    position.makeMove(*move);
-    search_state++;
-    auto score = -searchImpl(-beta, -alpha, depth + 1, depth_end, result);
-    search_state--;
-    position.unmakeMove(*move);
-    if (beta <= score) { return score; } // Beta cut
-    if (alpha < score) {
-      alpha = score;
-      best_move = *move;
-      for (int d = depth + 1; d < depth_end; d++) {
-        search_state->pv[d] = (search_state + 1)->pv[d];
+  // NOTE: possible hit entry can be overwritten during recursive call of "searchImpl"
+  auto& tt_entry = transposition_table.probe(position.state->key);
+
+  Move best_move;
+  NodeType node_type = kAllNode;
+  Score score = -kScoreInf;
+  int move_cnt = 0;
+
+  // TODO: Reduce copy-paste
+
+  // Use lambda to skip from anywhere to the end
+  ([&]() {
+
+    if (tt_entry.hit && tt_entry.node_type != kAllNode) {
+      // TODO: Use tt_entry.score and depth for beta cut
+
+      // TT move
+      // TODO: it seems there's some invalid move passing through and crushing engine...
+      auto move = tt_entry.move;
+      if (position.isPseudoLegal(move) && position.isLegal(move)) {
+        position.makeMove(move);
+        search_state++;
+        Score tmp_score = -searchImpl(-beta, -alpha, depth + 1, depth_end, result);
+        search_state--;
+        position.unmakeMove(move);
+        if (score < tmp_score) {
+          score = tmp_score;
+          best_move = move;
+        }
+        if (beta <= score) { // beta cut
+          node_type = kCutNode;
+          return;
+        }
+        if (alpha < score) { // pv
+          node_type = kPVNode;
+          alpha = score;
+          best_move = move;
+          for (int d = depth + 1; d < depth_end; d++) {
+            search_state->pv[d] = (search_state + 1)->pv[d];
+          }
+        }
       }
     }
-  }
+
+    // Children nodes
+    position.generateMoves();
+    while (auto move = position.move_list->getNext()) {
+      if (!checkSearchLimit()) { return; }
+
+      move_cnt++;
+      position.makeMove(*move);
+      search_state++;
+      Score tmp_score = -searchImpl(-beta, -alpha, depth + 1, depth_end, result);
+      search_state--;
+      position.unmakeMove(*move);
+      if (score < tmp_score) {
+        score = tmp_score;
+        best_move = *move;
+      }
+      if (beta <= score) { // beta cut
+        node_type = kCutNode;
+        return;
+      }
+      if (alpha < score) { // pv
+        node_type = kPVNode;
+        alpha = score;
+        best_move = *move;
+        for (int d = depth + 1; d < depth_end; d++) {
+          search_state->pv[d] = (search_state + 1)->pv[d];
+        }
+      }
+    }
+
+    // Leaf node (checkmate or stalemate)
+    if (move_cnt == 0) {
+      score = std::max<Score>(score, position.evaluateLeaf(depth));
+      if (beta <= score) { // beta cut
+        node_type = kCutNode;
+        return;
+      }
+      if (alpha < score) { // pv
+        node_type = kPVNode;
+        alpha = score;
+        best_move = Move(); // kNoMoveType in pv indicates checkmate/stalemate
+      }
+    }
+  })(); // lambda end
+
   if (!checkSearchLimit()) { return 0; }
 
-  // Leaf node (checkmate or stalemate)
-  if (position.move_list->size() == 0) {
-    auto score = position.state->checkers ? -Evaluation::mateScore(depth) : kScoreDraw;
-    if (beta <= score) { return score; } // Beta cut
-    if (alpha < score) {
-      alpha = score;
-      best_move = Move();
-    }
+  tt_entry.hit = 1;
+  tt_entry.key = position.state->key;
+  tt_entry.node_type = node_type;
+  tt_entry.move = best_move;
+  tt_entry.score = score;
+  tt_entry.depth = depth_end - depth;
+
+  if (node_type == kAllNode) {
+    return alpha;
   }
 
+  if (node_type == kCutNode) {
+    return beta;
+  }
+
+  // node_type == kPVNode
   search_state->pv[depth] = best_move;
   return alpha;
 }

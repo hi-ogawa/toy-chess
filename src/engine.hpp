@@ -1,4 +1,5 @@
 #include "position.hpp"
+#include "transposition_table.hpp"
 #include "nn/evaluator.hpp"
 
 enum SearchResultType { kSearchResultInfo, kSearchResultBestMove, kNoSearchResult };
@@ -35,8 +36,7 @@ struct TimeControl {
   static inline const double kSafeFactor = 0.9;
   static inline const double kInfDuration = 1e12; // 10^12 msec ~ 30 years
 
-  TimePoint start;
-  TimePoint finish = now() + Msec(int64_t(kInfDuration));
+  TimePoint start, finish;
 
   void initialize(const GoParameters&, Color, int);
   bool checkLimit() { return now() < finish; }
@@ -52,6 +52,8 @@ struct SearchState {
 struct Engine {
   Position position;
   nn::Evaluator evaluator;
+  TranspositionTable transposition_table;
+  static inline const size_t kDefaultTableSizeMB = 64;
 
   GoParameters go_parameters = {};
   TimeControl time_control = {};
@@ -73,6 +75,12 @@ struct Engine {
     evaluator.loadEmbeddedWeight();
     position.evaluator = &evaluator;
     position.reset();
+    transposition_table.resizeMB(kDefaultTableSizeMB);
+  }
+
+  void reset() {
+    position.initialize(kFenInitialPosition);
+    transposition_table.reset();
   }
 
   // "go" and "stop/wait" should be called from different threads

@@ -1,4 +1,8 @@
+#pragma once
+
 #include "base.hpp"
+#include "move.hpp"
+#include "evaluation.hpp"
 
 namespace Zobrist {
   using Key = uint32_t;
@@ -17,3 +21,41 @@ namespace Zobrist {
     ostr.flags(tmp);
   }
 }
+
+enum NodeType : uint8_t { kPVNode, kCutNode, kAllNode };
+
+struct TranspositionTable {
+
+  struct alignas(16) Entry {
+    Zobrist::Key key; // 4
+    Move move; // 2
+    Score score; // 2
+    NodeType node_type; // 1
+    uint8_t depth = 0; // 1
+    bool hit = 0;
+  };
+  static_assert(sizeof(Entry) == 16);
+
+  size_t size = 0;
+  vector<Entry> data;
+
+  void resize(size_t new_size) {
+    size = new_size;
+    data.assign(size, {});
+  }
+
+  void resizeMB(size_t mb) {
+    resize((mb * (1 << 20)) / sizeof(Entry));
+  }
+
+  void reset() {
+    data.assign(size, {});
+  }
+
+  Entry& probe(Zobrist::Key key) {
+    auto index = key % size;
+    auto& value = data[index];
+    value.hit = value.hit && (value.key == key);
+    return value;
+  }
+};

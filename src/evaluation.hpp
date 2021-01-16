@@ -2,9 +2,10 @@
 
 #include "base.hpp"
 
-using Score = int;
+using Score = int16_t;
 const Score kScoreInf = 32001;
 const Score kScoreMate = 32000;
+const Score kScoreWin = 10000;
 const Score kScoreDraw = 0;
 
 //

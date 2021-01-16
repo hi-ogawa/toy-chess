@@ -75,8 +75,8 @@ add_executable(main_test
   src/position_test.cpp
   src/engine_test.cpp
   src/uci_test.cpp
-  src/nn/evaluator_test.cpp
   src/timeit_test.cpp
+  src/nn/evaluator_test.cpp
 )
 target_link_libraries(main_test PRIVATE main_lib Catch2WithMain)
 target_precompile_headers(main_test REUSE_FROM main_pch)
@@ -89,6 +89,7 @@ target_precompile_headers(main REUSE_FROM main_pch)
 # main_bench
 add_executable(main_bench
   src/position_bench.cpp
+  src/engine_bench.cpp
   src/nn/evaluator_bench.cpp
 )
 target_link_libraries(main_bench PRIVATE main_lib Catch2WithMain)

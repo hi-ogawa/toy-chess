@@ -70,7 +70,7 @@ struct UCI {
     // setoption name <id> [value <x>]
     ASSERT(readToken(command) == "name");
     auto id = readToken(command);
-    printError("Unsupported command [setoption " + id + "]");
+    printError("Unsupported command [setoption name " + id + " ...]");
   }
 
   void uci_register(std::istream&) {
@@ -78,7 +78,7 @@ struct UCI {
   }
 
   void uci_ucinewgame(std::istream&) {
-    printError("Unsupported command [ucinewgame]");
+    engine.reset();
   }
 
   void uci_position(std::istream&);

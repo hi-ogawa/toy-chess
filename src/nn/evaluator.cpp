@@ -10,7 +10,8 @@ Score Evaluator::evaluate() {
   model.l3->forward(tmp3, tmp4);
   relu<WIDTH4>(tmp4, tmp4);
   model.l4->forward(tmp4, &tmp5);
-  return std::round(tmp5 * 100);
+  Score score = std::round(tmp5 * 100);
+  return std::clamp<Score>(score, -kScoreWin, kScoreWin);
 }
 
 void Evaluator::initialize(const Position& pos) {

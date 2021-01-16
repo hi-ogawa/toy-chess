@@ -540,6 +540,74 @@ void Position::generateMoves() {
   }
 }
 
+bool Position::isPseudoLegal(const Move& move) const {
+  if (move.type() == kNoMoveType) { return 0; }
+
+  Color own = side_to_move;
+  Board occ = occupancy[kBoth];
+  Board target = ~occupancy[own];
+
+  auto from_type = piece_on[own][move.from()];
+
+  if (from_type == kNoPieceType) { return 0; }
+  if (!(move.to() & target)) { return 0; }
+
+  if (move.type() == kCastling) {
+    if (from_type != kKing) { return 0; }
+    auto side = move.castlingSide();
+    if (!state->castling_rights[own][side]) { return 0; }
+    auto [king_from, king_to, rook_from, rook_to] = kCastlingMoves[own][side];
+    if (in_between_table[king_from][rook_from] & occ) { return 0; }
+    return 1;
+  }
+
+  if (move.type() == kEnpassant) {
+    if (from_type != kPawn) { return 0; }
+    if (state->ep_square & toBB(move.to())) { return 1; }
+    return 0;
+  }
+
+  if (move.type() == kPromotion) {
+    if (from_type != kPawn) { return 0; }
+    if (!(kBackrankBB[!own] & toBB(move.to()))) { return 0; }
+  }
+
+  // kNormal or kPromotion
+
+  if (from_type == kPawn) {
+    auto [push1, push2] = getPawnPush(own);
+    // single push
+    if (move.to() == move.from() + kPawnPushDirs[own]) {
+      return toBB(move.to()) & push1 & target;
+    }
+    // double push
+    if (move.to() == move.from() + 2 * kPawnPushDirs[own]) {
+      return toBB(move.to()) & push2 & target;
+    }
+    // capture
+    if (toBB(move.to()) & pawn_attack_table[own][move.from()]) {
+      return toBB(move.to()) & occupancy[!own];
+    }
+    return 0;
+  }
+  if (from_type == kKnight) {
+    return toBB(move.to()) & knight_attack_table[move.from()] & target;
+  }
+  if (from_type == kBishop) {
+    return toBB(move.to()) & getBishopAttack(move.from(), occ) & target;
+  }
+  if (from_type == kRook) {
+    return toBB(move.to()) & getRookAttack(move.from(), occ) & target;
+  }
+  if (from_type == kQueen) {
+    return toBB(move.to()) & getQueenAttack(move.from(), occ) & target;
+  }
+  if (from_type == kKing) {
+    return toBB(move.to()) & king_attack_table[move.from()] & target;
+  }
+  return 1;
+}
+
 bool Position::isLegal(const Move& move) const {
   Color own = side_to_move;
 
