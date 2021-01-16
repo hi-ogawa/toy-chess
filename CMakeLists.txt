@@ -76,6 +76,7 @@ add_executable(main_test
   src/engine_test.cpp
   src/uci_test.cpp
   src/nn/evaluator_test.cpp
+  src/timeit_test.cpp
 )
 target_link_libraries(main_test PRIVATE main_lib Catch2WithMain)
 target_precompile_headers(main_test REUSE_FROM main_pch)
@@ -86,13 +87,12 @@ target_link_libraries(main PRIVATE main_lib)
 target_precompile_headers(main REUSE_FROM main_pch)
 
 # main_bench
-if(CMAKE_BUILD_TYPE MATCHES Release)
-  add_executable(main_bench
-    src/position_bench.cpp
-  )
-  target_link_libraries(main_bench PRIVATE main_lib Catch2WithMain)
-  target_precompile_headers(main_bench REUSE_FROM main_pch)
-endif()
+add_executable(main_bench
+  src/position_bench.cpp
+  src/nn/evaluator_bench.cpp
+)
+target_link_libraries(main_bench PRIVATE main_lib Catch2WithMain)
+target_precompile_headers(main_bench REUSE_FROM main_pch)
 
 # nn_preprocess
 add_executable(nn_preprocess src/nn/training/preprocess.cpp)

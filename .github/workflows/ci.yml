@@ -28,4 +28,4 @@ jobs:
       - name: Build
         run: python script.py init --clang && python script.py build
       - name: === Benchmark ===
-        run: build/Release/main_bench --benchmark-samples 10
+        run: build/Release/main_bench -s

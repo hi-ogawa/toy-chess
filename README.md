@@ -14,5 +14,5 @@ python script.py run --e main_test -- -s
 Benchmark
 
 ```
-python script.py run --e main_bench -- --benchmark-samples 5
+python script.py run --e main_bench -- -s
 ```
