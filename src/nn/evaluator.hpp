@@ -47,7 +47,7 @@ struct MyModel {
   void loadEmbeddedWeight() {
     // NOTE: Make istream from char array (Cf. https://stackoverflow.com/questions/7781898/get-an-istream-from-a-char)
     struct CharStreambuf : std::streambuf {
-      CharStreambuf(char* ptr, size_t size) { setg(ptr, ptr, ptr + size); }
+      CharStreambuf(char* ptr, int size) { setg(ptr, ptr, ptr + size); }
     };
     CharStreambuf buf(const_cast<char*>(kEmbeddedWeight), kEmbeddedWeightSize);
 

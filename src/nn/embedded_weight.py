@@ -7,9 +7,9 @@ def main(infile):
   data_literal = ('+' + data.hex('+')).replace('+', '\\x')
   print("namespace nn {")
   print("  extern const char* kEmbeddedWeight;")
-  print("  extern const size_t kEmbeddedWeightSize;")
+  print("  extern const int kEmbeddedWeightSize;")
   print("  const char* kEmbeddedWeight = \"", data_literal, "\";", sep="")
-  print("  const size_t kEmbeddedWeightSize = ", size, ";", sep="")
+  print("  const int kEmbeddedWeightSize = ", size, ";", sep="")
   print("}")
 
 

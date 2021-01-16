@@ -11,13 +11,14 @@ if(CMAKE_BUILD_TYPE MATCHES Debug)
 endif()
 
 # SIMD
-option(USE_SIMD "Use SIMD" ON)
-if(${USE_SIMD})
-  add_compile_options(-mavx -mfma)
+option(USE_AVX "Use AVX" OFF)
+option(USE_FMA "Use FMA" OFF)
+if(USE_AVX)
+  add_compile_options("-mavx")
 endif()
-
-# Pthread for std::async
-add_link_options(-lpthread)
+if(USE_FMA)
+  add_compile_options("-mfma")
+endif()
 
 # Catch2 testing
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/Catch2)
@@ -25,7 +26,7 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/Catch2)
 # Precompiled header
 file(GENERATE OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/main_pch_dummy.cpp CONTENT "")
 add_library(main_pch ${CMAKE_CURRENT_BINARY_DIR}/main_pch_dummy.cpp)
-target_precompile_headers(main_pch PUBLIC <bits/stdc++.h>)
+target_precompile_headers(main_pch PRIVATE <bits/stdc++.h>)
 
 # config.h
 include_directories(${CMAKE_CURRENT_BINARY_DIR})
@@ -65,6 +66,7 @@ add_library(main_lib
   src/nn/evaluator.cpp
   ${EMBEDDED_WEIGHT_CPP}
 )
+target_link_libraries(main_lib PRIVATE pthread) # for std::async
 target_precompile_headers(main_lib REUSE_FROM main_pch)
 add_dependencies(main_lib generate_embedded_weight)
 

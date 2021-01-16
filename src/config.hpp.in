@@ -1,6 +1,10 @@
 #pragma once
 
-#cmakedefine USE_SIMD
-
 #include <string_view>
 constexpr std::string_view kBuildType = "@CMAKE_BUILD_TYPE@";
+
+constexpr bool ON = true;
+constexpr bool OFF = false;
+
+constexpr bool kUseAVX = @USE_AVX@;
+constexpr bool kUseFMA = @USE_FMA@;

@@ -27,7 +27,7 @@ TEST_CASE("nn::Evaluator") {
     SUCCEED();
   }
 
-  SECTION("update") {
+  SECTION("evaluate") {
     INFO(timeit::timeit([&]() {
       return evaluator.evaluate();
     }));
