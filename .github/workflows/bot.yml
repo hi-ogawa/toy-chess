@@ -1,0 +1,19 @@
+name: Bot
+on:
+  workflow_dispatch:
+    inputs:
+      options:
+        description: Options for lichess-bot.py
+        required: true
+        default: "-v"
+jobs:
+  bot:
+    name: Bot
+    runs-on: ubuntu-latest
+    container:
+      image: hiogawa/toy-chess:avx
+      env:
+        LICHESS_TOKEN: ${{ secrets.LICHESS_TOKEN }}
+        LICHESS_BOT_OPTIONS: ${{ github.event.inputs.options }}
+    steps:
+      - run: cd /lichess-bot && bash main.sh

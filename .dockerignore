@@ -5,6 +5,7 @@ src/nn/data/*
 # misc
 misc
 !misc/bot/config.yml
+!misc/bot/main.sh
 
 # thirdparty
 thirdparty/Stockfish
