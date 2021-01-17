@@ -17,8 +17,8 @@ docker push hiogawa/toy-chess:avx
 
 Run from Github workflow dispatch
 
-- Manually trigger from https://github.com/hi-ogawa/toy-chess/actions?query=workflow%3ABot.
-- Note that the single action can run only 6 hours (cf. https://docs.github.com/en/actions/reference/usage-limits-billing-and-administration#usage-limits).
+- Use workflows/bot.yml for one shot or workflows/bot_forever.yml for (possibly) running 24/7.
+- Note that the single action can run only 6 hours (see https://docs.github.com/en/actions/reference/usage-limits-billing-and-administration#usage-limits).
 
 
 Deploy on Heroku

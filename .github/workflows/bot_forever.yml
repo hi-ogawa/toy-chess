@@ -1,0 +1,19 @@
+name: Bot forever
+on: [workflow_dispatch]
+jobs:
+  bot:
+    name: Bot
+    runs-on: ubuntu-latest
+    container:
+      image: hiogawa/toy-chess:avx
+      env:
+        LICHESS_TOKEN: ${{ secrets.LICHESS_TOKEN }}
+        LICHESS_BOT_OPTIONS: -v
+    steps:
+      - name: Run lichess-bot.py
+        run: cd /lichess-bot && timeout --preserve-status --signal=INT 5h bash main.sh
+      - name: Call recursively
+        uses: benc-uk/workflow-dispatch@v1
+        with:
+          workflow: Bot forever
+          token: ${{ secrets.BOT_FOREVER_TOKEN }}
