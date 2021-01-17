@@ -89,7 +89,7 @@ TEST_CASE("UCI") {
   CHECK(tester.putAndCheck("position fen 8/2k5/7R/6R1/8/4K3/8/8 w - - 0 1", {}) == 1);
 
   tester.putLine("go depth 4");
-  CHECK_THAT(tester.getLine(), Contains("info string debug eval ="));
+  CHECK_THAT(tester.getLine(), Contains("info string"));
   CHECK_THAT(tester.getLine(), Contains("info"));
   CHECK_THAT(tester.getLine(), Contains("info"));
   CHECK_THAT(tester.getLine(), Contains("info"));

@@ -41,6 +41,7 @@ struct TimeControl {
   void initialize(const GoParameters&, Color, int);
   bool checkLimit() { return now() < finish; }
   int64_t getTime() { return std::chrono::duration_cast<Msec>(now() - start).count(); }
+  int64_t getDuration() { return std::chrono::duration_cast<Msec>(finish - start).count(); }
 };
 
 

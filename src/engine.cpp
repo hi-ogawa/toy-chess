@@ -9,7 +9,7 @@ void TimeControl::initialize(const GoParameters& go, Color own, int ply) {
   if (go.time[own] != 0) {
     double time = go.time[own];
     double inc = go.inc[own];
-    int cnt = go.movestogo ? go.movestogo : std::max(10, 50 - ply / 2);
+    int cnt = go.movestogo ? go.movestogo : std::max(10, 32 - ply / 2);
     duration = std::min(duration, (time + inc * (cnt - 1)) / cnt); // Split remaining time to each move
   }
   finish = start + Msec(int64_t(kSafeFactor * duration));
@@ -79,10 +79,12 @@ void Engine::goImpl() {
   time_control.initialize(go_parameters, position.side_to_move, position.game_ply);
   ASSERT(checkSearchLimit());
 
-  // Send static eval
+  // Debug info
   SearchResult info;
   info.type = kSearchResultInfo;
-  info.misc = "debug eval = " + toString(evaluator.evaluate());
+  info.misc += "side = " + toString(position.side_to_move) + ", ";
+  info.misc += "eval = " + toString(evaluator.evaluate()) + ", ";
+  info.misc += "time = " + toString(time_control.getDuration());
   search_result_callback(info);
 
   int depth_end = go_parameters.depth;
@@ -131,6 +133,8 @@ SearchResult Engine::search(int depth) {
 }
 
 Score Engine::quiescenceSearch(Score alpha, Score beta, int depth, SearchResult& result) {
+  if (!checkSearchLimit()) { return -kScoreInf; }
+
   constexpr int kMaxQuiescenceDepth = 8;
   result.num_nodes++;
 
@@ -144,6 +148,8 @@ Score Engine::quiescenceSearch(Score alpha, Score beta, int depth, SearchResult&
   // Recursive capture moves
   position.generateMoves(/* only_capture */ 1);
   while (auto move = position.move_list->getNext()) {
+    if (!checkSearchLimit()) { break; }
+
     position.makeMove(*move);
     score = std::max<Score>(score, -quiescenceSearch(-beta, -alpha, depth + 1, result));
     position.unmakeMove(*move);
@@ -155,7 +161,7 @@ Score Engine::quiescenceSearch(Score alpha, Score beta, int depth, SearchResult&
 }
 
 Score Engine::searchImpl(Score alpha, Score beta, int depth, int depth_end, SearchResult& result) {
-  if (!checkSearchLimit()) { return 0; }
+  if (!checkSearchLimit()) { return -kScoreInf; }
 
   // TODO Save quiescence search score in tt_entry
   if (depth == depth_end) { return quiescenceSearch(alpha, beta, 0, result); }
@@ -175,16 +181,15 @@ Score Engine::searchImpl(Score alpha, Score beta, int depth, int depth_end, Sear
   // Use lambda to skip from anywhere to the end
   ([&]() {
 
-    // TODO: Using hash score leads to engine crush...
-    // if (tt_entry.hit && depth_to_go <= tt_entry.depth && tt_entry.node_type != kAllNode) {
-    //   // beta cut
-    //   if (beta <= tt_entry.score && position.isPseudoLegal(tt_entry.move) && position.isLegal(tt_entry.move)) {
-    //     score = tt_entry.score;
-    //     node_type = kCutNode;
-    //     best_move = tt_entry.move;
-    //     return;
-    //   }
-    // }
+    // Hash score beta cut (NOTE: this can be wrong score due to key collision)
+    if (tt_entry.hit && depth_to_go <= tt_entry.depth && tt_entry.node_type != kAllNode) {
+      if (beta <= tt_entry.score && position.isPseudoLegal(tt_entry.move) && position.isLegal(tt_entry.move)) {
+        score = tt_entry.score;
+        node_type = kCutNode;
+        best_move = tt_entry.move;
+        return;
+      }
+    }
 
     if (tt_entry.hit && tt_entry.node_type != kAllNode) {
       // Hash move
@@ -192,15 +197,12 @@ Score Engine::searchImpl(Score alpha, Score beta, int depth, int depth_end, Sear
       if (position.isPseudoLegal(move) && position.isLegal(move)) {
         position.makeMove(move);
         search_state++;
-        Score tmp_score = -searchImpl(-beta, -alpha, depth + 1, depth_end, result);
+        score = std::max<Score>(score, -searchImpl(-beta, -alpha, depth + 1, depth_end, result));
         search_state--;
         position.unmakeMove(move);
-        if (score < tmp_score) {
-          score = tmp_score;
-          best_move = move;
-        }
         if (beta <= score) { // beta cut
           node_type = kCutNode;
+          best_move = move;
           return;
         }
         if (alpha < score) { // pv
@@ -257,17 +259,12 @@ Score Engine::searchImpl(Score alpha, Score beta, int depth, int depth_end, Sear
     }
   })(); // lambda end
 
-  if (!checkSearchLimit()) { return 0; }
-
   tt_entry.hit = 1;
   tt_entry.key = position.state->key;
   tt_entry.node_type = node_type;
   tt_entry.move = best_move;
   tt_entry.score = score;
   tt_entry.depth = depth_to_go;
-
-  if (node_type == kPVNode) {
-    search_state->pv[depth] = best_move;
-  }
+  search_state->pv[depth] = best_move;
   return score;
 }
