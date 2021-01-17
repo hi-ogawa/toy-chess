@@ -95,7 +95,7 @@ int main(int argc, const char* argv[]) {
   auto outfile = cli.getArg<string>("--outfile");
   bool shuffle = cli.getArg<int>("--shuffle").value_or(1);
   int buffer_size = cli.getArg<int>("--buffer-size").value_or(500000);
-  int eval_limit = cli.getArg<int>("--eval-limit").value_or(3000); // NOTE: gensfen's "eval_limit" doesn't perfectly limit, so here we filter again.
+  int eval_limit = cli.getArg<int>("--eval-limit").value_or(10000); // NOTE: gensfen's "eval_limit" doesn't perfectly limit, so here we can filter further.
   if (!infile) {
     std::cerr << cli.help() << std::endl;
     return 1;

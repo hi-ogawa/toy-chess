@@ -53,13 +53,15 @@ class MyMetric:
     self.l1 = 0
     self.cnt = 0
     self.cnt_correct = 0
+    self.loss = 0
 
-  def update(self, y1, y2):
+  def update(self, y1, y2, loss):
     self.cnt += y1.numel()
     self.mom[0] += torch.sum(y1 - y2)
     self.mom[1] += torch.sum((y1 - y2) ** 2)
     self.l1 += torch.sum(torch.abs(y1 - y2))
     self.cnt_correct += torch.sum((y1 >= 0) == (y2 >= 0))
+    self.loss += loss
 
   def compute(self):
     mean = self.mom[0] / self.cnt
@@ -68,7 +70,8 @@ class MyMetric:
     std = torch.sqrt(var)
     l1 = self.l1 / self.cnt
     accuracy = self.cnt_correct / self.cnt
-    return mean, std, l1, accuracy
+    loss = self.loss / self.cnt
+    return mean, std, l1, accuracy, loss
 
 
 #
@@ -153,7 +156,7 @@ def train(dataset_file, test_dataset_file, ckpt_file, ckpt_dir, num_epochs, batc
   print(model)
 
   optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
-  scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor=0.5, patience=0, mode='max')
+  scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor=0.5, patience=2)
   init_epoch = 0
 
   if ckpt_file is not None:
@@ -180,13 +183,15 @@ def train(dataset_file, test_dataset_file, ckpt_file, ckpt_dir, num_epochs, batc
         loss.backward()
         optimizer.step()
         loss_L1 = F.l1_loss(y_model, y_target)
-        metric.update(y_model, y_target)
+        metric.update(y_model.detach(), y_target.detach(), loss.detach() * y_model.numel())
         progressbar.set_postfix(loss_L1=float(loss_L1), loss=float(loss))
-    mean, std, l1, accuracy = metric.compute()
-    print(f"mean = {mean}, std = {std}, L1 = {l1}, accuracy = {accuracy}")
-    train_loss = accuracy
+    mean, std, l1, accuracy, metric_loss = metric.compute()
+    print(f"mean = {mean}, std = {std}, L1 = {l1}, accuracy = {accuracy}, loss = {metric_loss}")
+    train_loss = metric_loss
+    train_accuracy = accuracy
 
     test_loss = 0
+    test_accuracy = 0
     if test_dataset_file:
       print(f":: Validation loop")
       metric = MyMetric()
@@ -195,10 +200,13 @@ def train(dataset_file, test_dataset_file, ckpt_file, ckpt_dir, num_epochs, batc
         x_w, x_b, y_target = [t.to(DEVICE) for t in batch_sample]
         y_target = normalize_score(y_target)
         y_model = model(x_w, x_b)
-        metric.update(y_model, y_target)
-      mean, std, l1, accuracy = metric.compute()
-      print(f"mean = {mean}, std = {std}, L1 = {l1}, accuracy = {accuracy}")
-      test_loss = accuracy
+        loss = my_loss_func(y_model, y_target, loss_mode)
+        test_loss += loss
+        metric.update(y_model.detach(), y_target.detach(), loss.detach() * y_model.numel())
+      mean, std, l1, accuracy, metric_loss = metric.compute()
+      print(f"mean = {mean}, std = {std}, L1 = {l1}, accuracy = {accuracy}, loss = {metric_loss}")
+      test_loss = metric_loss
+      test_accuracy = accuracy
       scheduler.step(test_loss)
 
     if ckpt_dir is not None:
@@ -209,7 +217,7 @@ def train(dataset_file, test_dataset_file, ckpt_file, ckpt_dir, num_epochs, batc
         "epoch": epoch,
       }
       timestamp = datetime.strftime(datetime.now(), "%F-%H-%M-%S")
-      ckpt_file = f"{ckpt_dir}/ckpt-{timestamp}-epoch-{epoch}-loss-{float(train_loss):.3}-{float(test_loss):.3}.pt"
+      ckpt_file = f"{ckpt_dir}/ckpt-{timestamp}-epoch-{epoch}-accuracy-{float(train_accuracy):.3}-{float(test_accuracy):.3}-loss-{float(train_loss):.3}-{float(test_loss):.3}.pt"
       print(f":: Saving checkpoint ({ckpt_file})")
       torch.save(ckpt, ckpt_file)
 
@@ -273,6 +281,7 @@ def process_model_parameters(infile, outfile):
   print(f":: Loading checkpoint ({infile})")
   parameters = torch.load(infile, map_location=DEVICE)["model_state_dict"]
   parameters = rename_model_parameters(parameters)
+  print(f":: Writing weight ({outfile})")
   with open(outfile, 'wb') as f:
     for tensor in parameters.values():
       f.write(bytes(np.array(tensor)))
