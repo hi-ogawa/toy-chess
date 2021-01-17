@@ -34,4 +34,4 @@ jobs:
       - uses: actions/upload-artifact@v2
         with:
           name: match-results
-          path: misc/match/result-*.pgn
+          path: misc/match/data/result-*.pgn
