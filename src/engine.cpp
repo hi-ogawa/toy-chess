@@ -152,8 +152,7 @@ Score Engine::searchImpl(Score alpha, Score beta, int depth, int depth_end, Sear
     if (tt_entry.hit && tt_entry.node_type != kAllNode) {
       // TODO: Use tt_entry.score and depth for beta cut
 
-      // TT move
-      // TODO: it seems there's some invalid move passing through and crushing engine...
+      // Hash move
       auto move = tt_entry.move;
       if (position.isPseudoLegal(move) && position.isLegal(move)) {
         position.makeMove(move);

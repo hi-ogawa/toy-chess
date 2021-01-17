@@ -48,6 +48,12 @@ TEST_CASE("Position::generateMoves") {
   CHECK(toString(pos.move_list->toVector()) == expected);
 }
 
+TEST_CASE("Position::isLegal") {
+  Position pos;
+  CHECK(pos.isPseudoLegal(Move(kA2, kA3)) == true);
+  CHECK(pos.isLegal(Move(kA2, kA3)) == true);
+}
+
 TEST_CASE("Position::perft") {
   // Cf. https://www.chessprogramming.org/Perft_Results
   vector<pair<string, array<int64_t, 7>>> cases = {

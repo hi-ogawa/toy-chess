@@ -550,7 +550,7 @@ bool Position::isPseudoLegal(const Move& move) const {
   auto from_type = piece_on[own][move.from()];
 
   if (from_type == kNoPieceType) { return 0; }
-  if (!(move.to() & target)) { return 0; }
+  if (!(toBB(move.to()) & target)) { return 0; }
 
   if (move.type() == kCastling) {
     if (from_type != kKing) { return 0; }
