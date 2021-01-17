@@ -96,6 +96,8 @@ struct Engine {
   SearchResult search(int);
   Score searchImpl(Score, Score, int, int, SearchResult&);
 
+  Score quiescenceSearch(Score, Score, int, SearchResult&);
+
   void load(const string& filename) { evaluator.load(filename); }
 
   void print(std::ostream&);

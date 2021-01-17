@@ -273,7 +273,7 @@ void Position::makeMove(const Move& move) {
   Color own = side_to_move, opp = !own;
   auto from_type = piece_on[own][move.from()];
   auto to_type = state->to_piece_type = piece_on[opp][move.to()];
-  assert(from_type != kNoPieceType);
+  ASSERT(from_type != kNoPieceType);
 
   //
   // put/remove/move pieces
@@ -377,7 +377,7 @@ void Position::unmakeMove(const Move& move) {
   Color own = side_to_move, opp = !own;
   auto from_type = piece_on[own][move.to()];
   auto to_type = state->to_piece_type;
-  assert(from_type != kNoPieceType);
+  ASSERT(from_type != kNoPieceType);
 
   //
   // put/remove/move pieces
@@ -426,7 +426,7 @@ void Position::unmakeMove(const Move& move) {
 // Move generation
 //
 
-void Position::generateMoves() {
+void Position::generateMoves(bool only_capture) {
   move_list->initialize(this);
 
   Color own = side_to_move, opp = !own;
@@ -437,45 +437,58 @@ void Position::generateMoves() {
 
   bool checked = state->checkers;
   bool multiple_checked = toSQ(state->checkers).size() >= 2;
+
+  // "to" Target for non-king pieces
   Board target = 0;
+
   if (!checked) {
     // Quiet or Capture
-    target = ~own_occ;
+    target = only_capture ? opp_occ : ~own_occ;
   }
+
   if (checked && !multiple_checked) {
     // Block or Capture single checker
-    Square checker_sq = toSQ(state->checkers).front();
-    target = in_between_table[king_sq][checker_sq] | state->checkers;
+    if (only_capture) {
+      target = state->checkers;
+
+    } else {
+      Square checker_sq = toSQ(state->checkers).front();
+      target = state->checkers | in_between_table[king_sq][checker_sq];
+    }
   }
 
   if (!multiple_checked) {
     // Pawn
     {
-      // Push
-      auto [push1, push2] = getPawnPush(own);
-      push1 &= target;
-      push2 &= target;
-      for (auto to : toSQ(push1 & kBackrankBB[opp])) { // Promotion
-        auto from = to - kPawnPushDirs[own];
-        for (auto type : {kKnight, kBishop, kRook, kQueen}) {
-          Move move(from, to, kPromotion, type);
-          move_list->insert(move);
+      // TODO: Stockfish includes good promotions as "only_capture"
+      if (!only_capture) {
+        // Push
+        auto [push1, push2] = getPawnPush(own);
+        push1 &= target;
+        push2 &= target;
+        for (auto to : toSQ(push1 & kBackrankBB[opp])) { // Promotion
+          auto from = to - kPawnPushDirs[own];
+          for (auto type : {kQueen, kKnight, kBishop, kRook}) {
+            Move move(from, to, kPromotion, type);
+            move_list->insert(move);
+          }
+        }
+        for (auto to : toSQ(push1 & ~kBackrankBB[opp])) { // Non-promotion
+          auto from = to - kPawnPushDirs[own];
+          move_list->insert(Move(from, to));
+        }
+        for (auto to : toSQ(push2)) { // Double push
+          auto from = to - 2 * kPawnPushDirs[own];
+          move_list->insert(Move(from, to));
         }
       }
-      for (auto to : toSQ(push1 & ~kBackrankBB[opp])) { // Non-promotion
-        auto from = to - kPawnPushDirs[own];
-        move_list->insert(Move(from, to));
-      }
-      for (auto to : toSQ(push2)) { // Double push
-        auto from = to - 2 * kPawnPushDirs[own];
-        move_list->insert(Move(from, to));
-      }
 
+      // TODO: probably we can optimize by generating attack squares first then finding "from" square
       for (auto from : toSQ(pieces[own][kPawn])) {
         // Capture
         Board capture = pawn_attack_table[own][from] & opp_occ & target;
         for (auto to : toSQ(capture & kBackrankBB[opp])) { // Promotion
-          for (auto type : {kKnight, kBishop, kRook, kQueen}) {
+          for (auto type : {kQueen, kKnight, kBishop, kRook}) {
             Move move(from, to, kPromotion, type);
             move_list->insert(move);
           }
@@ -522,14 +535,15 @@ void Position::generateMoves() {
   }
 
   // King
+  Board king_target = only_capture ? opp_occ : ~own_occ;
   for (auto from : toSQ(pieces[own][kKing])) {
-    for (auto to : toSQ(king_attack_table[from] & ~own_occ)) {
+    for (auto to : toSQ(king_attack_table[from] & king_target)) {
       move_list->insert(Move(from, to));
     }
   }
 
   // Castling
-  if (!checked) {
+  if (!checked && !only_capture) {
     for (auto side : {kOO, kOOO}) {
       if (!state->castling_rights[own][side]) { continue; }
       auto [king_from, king_to, rook_from, rook_to] = kCastlingMoves[own][side];

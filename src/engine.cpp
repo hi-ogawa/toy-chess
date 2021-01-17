@@ -130,11 +130,37 @@ SearchResult Engine::search(int depth) {
   return res;
 }
 
+Score Engine::quiescenceSearch(Score alpha, Score beta, int depth, SearchResult& result) {
+  constexpr int kMaxQuiescenceDepth = 8;
+  result.num_nodes++;
+
+  // Stand pat
+  Score score = position.evaluate();
+  if (depth == kMaxQuiescenceDepth) { return score; }
+
+  if (beta < score) { return score; }
+  if (alpha < score) { alpha = score; }
+
+  // Recursive capture moves
+  position.generateMoves(/* only_capture */ 1);
+  while (auto move = position.move_list->getNext()) {
+    position.makeMove(*move);
+    score = std::max<Score>(score, -quiescenceSearch(-beta, -alpha, depth + 1, result));
+    position.unmakeMove(*move);
+    if (beta < score) { return score; }
+    if (alpha < score) { alpha = score; }
+  }
+
+  return score;
+}
+
 Score Engine::searchImpl(Score alpha, Score beta, int depth, int depth_end, SearchResult& result) {
   if (!checkSearchLimit()) { return 0; }
 
+  // TODO Save quiescence search score in tt_entry
+  if (depth == depth_end) { return quiescenceSearch(alpha, beta, 0, result); }
+
   result.num_nodes++;
-  if (depth == depth_end) { return position.evaluate(); } // TODO: Save to tt_entry.score
 
   // NOTE: possible hit entry can be overwritten during recursive call of "searchImpl"
   auto& tt_entry = transposition_table.probe(position.state->key);
@@ -142,16 +168,25 @@ Score Engine::searchImpl(Score alpha, Score beta, int depth, int depth_end, Sear
   Move best_move;
   NodeType node_type = kAllNode;
   Score score = -kScoreInf;
-  int move_cnt = 0;
+  int depth_to_go = depth_end - depth;
 
   // TODO: Reduce copy-paste
 
   // Use lambda to skip from anywhere to the end
   ([&]() {
 
-    if (tt_entry.hit && tt_entry.node_type != kAllNode) {
-      // TODO: Use tt_entry.score and depth for beta cut
+    // TODO: Using hash score leads to engine crush...
+    // if (tt_entry.hit && depth_to_go <= tt_entry.depth && tt_entry.node_type != kAllNode) {
+    //   // beta cut
+    //   if (beta <= tt_entry.score && position.isPseudoLegal(tt_entry.move) && position.isLegal(tt_entry.move)) {
+    //     score = tt_entry.score;
+    //     node_type = kCutNode;
+    //     best_move = tt_entry.move;
+    //     return;
+    //   }
+    // }
 
+    if (tt_entry.hit && tt_entry.node_type != kAllNode) {
       // Hash move
       auto move = tt_entry.move;
       if (position.isPseudoLegal(move) && position.isLegal(move)) {
@@ -180,6 +215,7 @@ Score Engine::searchImpl(Score alpha, Score beta, int depth, int depth_end, Sear
     }
 
     // Children nodes
+    int move_cnt = 0;
     position.generateMoves();
     while (auto move = position.move_list->getNext()) {
       if (!checkSearchLimit()) { return; }
@@ -187,15 +223,12 @@ Score Engine::searchImpl(Score alpha, Score beta, int depth, int depth_end, Sear
       move_cnt++;
       position.makeMove(*move);
       search_state++;
-      Score tmp_score = -searchImpl(-beta, -alpha, depth + 1, depth_end, result);
+      score = std::max<Score>(score, -searchImpl(-beta, -alpha, depth + 1, depth_end, result));
       search_state--;
       position.unmakeMove(*move);
-      if (score < tmp_score) {
-        score = tmp_score;
-        best_move = *move;
-      }
       if (beta <= score) { // beta cut
         node_type = kCutNode;
+        best_move = *move;
         return;
       }
       if (alpha < score) { // pv
@@ -213,12 +246,13 @@ Score Engine::searchImpl(Score alpha, Score beta, int depth, int depth_end, Sear
       score = std::max<Score>(score, position.evaluateLeaf(depth));
       if (beta <= score) { // beta cut
         node_type = kCutNode;
+        best_move = Move(); // kNoMoveType in pv indicates checkmate/stalemate
         return;
       }
       if (alpha < score) { // pv
         node_type = kPVNode;
         alpha = score;
-        best_move = Move(); // kNoMoveType in pv indicates checkmate/stalemate
+        best_move = Move();
       }
     }
   })(); // lambda end
@@ -230,17 +264,10 @@ Score Engine::searchImpl(Score alpha, Score beta, int depth, int depth_end, Sear
   tt_entry.node_type = node_type;
   tt_entry.move = best_move;
   tt_entry.score = score;
-  tt_entry.depth = depth_end - depth;
+  tt_entry.depth = depth_to_go;
 
-  if (node_type == kAllNode) {
-    return alpha;
+  if (node_type == kPVNode) {
+    search_state->pv[depth] = best_move;
   }
-
-  if (node_type == kCutNode) {
-    return beta;
-  }
-
-  // node_type == kPVNode
-  search_state->pv[depth] = best_move;
-  return alpha;
+  return score;
 }
