@@ -483,26 +483,7 @@ void Position::generateMoves(bool only_capture) {
         }
       }
 
-      // TODO: probably we can optimize by generating attack squares first then finding "from" square
-      for (auto from : toSQ(pieces[own][kPawn])) {
-        // Capture
-        Board capture = pawn_attack_table[own][from] & opp_occ & target;
-        for (auto to : toSQ(capture & kBackrankBB[opp])) { // Promotion
-          for (auto type : {kQueen, kKnight, kBishop, kRook}) {
-            Move move(from, to, kPromotion, type);
-            move_list->insert(move);
-          }
-        }
-        for (auto to : toSQ(capture & ~kBackrankBB[opp])) { // Non-promotion
-          move_list->insert(Move(from, to));
-        }
-
-        // En passant
-        if (pawn_attack_table[own][from] & state->ep_square) {
-          auto to = toSQ(state->ep_square).front();
-          move_list->insert(Move(from, to, kEnpassant));
-        }
-      }
+      Position::generatePawnCaptureMoves(own);
     }
 
     // Knight
@@ -550,6 +531,43 @@ void Position::generateMoves(bool only_capture) {
       if (in_between_table[king_from][rook_from] & occ) { continue; }
       Move move(king_from, king_to, kCastling);
       move_list->insert(move);
+    }
+  }
+}
+
+void Position::generatePawnCaptureMoves(Color own) {
+  array<std::pair<Board, Direction>, 2> right_and_left;
+
+  if (own == kWhite) {
+    auto b_push = pieces[own][kPawn] << 8;
+    auto b_cap_r = (b_push & ~BB::fromFile(kFileH)) << 1;
+    auto b_cap_l = (b_push & ~BB::fromFile(kFileA)) >> 1;
+    right_and_left = {{ {b_cap_r, kDirNE}, {b_cap_l, kDirNW} }};
+  } else {
+    auto b_push = pieces[own][kPawn] >> 8;
+    auto b_cap_r = (b_push & ~BB::fromFile(kFileH)) << 1;
+    auto b_cap_l = (b_push & ~BB::fromFile(kFileA)) >> 1;
+    right_and_left = {{ {b_cap_r, kDirSE}, {b_cap_l, kDirSW} }};
+  }
+
+  for (auto [b_cap, dir] : right_and_left) {
+    // Promotion
+    for (auto to : toSQ(b_cap & occupancy[!own] &  kBackrankBB[!own])) {
+      Square from = to - dir;
+      for (auto type : {kQueen, kKnight, kBishop, kRook}) {
+        move_list->insert(Move(from, to, kPromotion, type));
+      }
+    }
+    // Non promotion
+    for (auto to : toSQ(b_cap & occupancy[!own] & ~kBackrankBB[!own])) {
+      Square from = to - dir;
+      move_list->insert(Move(from, to));
+    }
+    // En passant
+    if (b_cap & state->ep_square) {
+      auto to = toSQ(state->ep_square).front();
+      Square from = to - dir;
+      move_list->insert(Move(from, to, kEnpassant));
     }
   }
 }

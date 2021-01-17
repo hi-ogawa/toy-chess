@@ -139,6 +139,7 @@ struct Position {
   void generateMoves(bool only_capture = 0); // Generate pseudo legal moves
   bool isLegal(const Move& move) const; // Check legality of pseudo legal move
   bool isPseudoLegal(const Move& move) const; // Check pseudo legality of any move (used to validate tt move)
+  void generatePawnCaptureMoves(Color);
 
   //
   // Perft
