@@ -11,8 +11,12 @@ if(CMAKE_BUILD_TYPE MATCHES Debug)
 endif()
 
 # SIMD
+option(USE_SSE "Use SSE" ON)
 option(USE_AVX "Use AVX" OFF)
 option(USE_FMA "Use FMA" OFF)
+if(USE_SSE)
+  add_compile_options("-msse")
+endif()
 if(USE_AVX)
   add_compile_options("-mavx")
 endif()
