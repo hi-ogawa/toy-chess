@@ -25,7 +25,7 @@ TEST_CASE("Position::print") {
     "+---+---+---+---+---+---+---+---+\n"
     "  a   b   c   d   e   f   g   h  \n"
     "\n"
-    "Key: 0x1754e78c\n"
+    "Key: 0x3d46308f5f0dec7c\n"
     "Fen: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1\n";
   CHECK(toString(pos) == expected);
 }

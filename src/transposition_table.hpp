@@ -5,7 +5,7 @@
 #include "evaluation.hpp"
 
 namespace Zobrist {
-  using Key = uint32_t;
+  using Key = uint64_t;
 
   // Hash seeds
   extern Key side_to_move;
@@ -17,7 +17,7 @@ namespace Zobrist {
 
   inline void print(Key key, std::ostream& ostr) {
     auto tmp = ostr.flags();
-    ostr << "0x" << std::setfill('0') << std::setw(8) << std::right << std::hex << key;
+    ostr << "0x" << std::setfill('0') << std::setw(16) << std::right << std::hex << key;
     ostr.flags(tmp);
   }
 }
@@ -27,7 +27,7 @@ enum NodeType : uint8_t { kPVNode, kCutNode, kAllNode };
 struct TranspositionTable {
 
   struct alignas(16) Entry {
-    Zobrist::Key key; // 4
+    Zobrist::Key key; // 8
     Move move; // 2
     Score score; // 2
     NodeType node_type; // 1
