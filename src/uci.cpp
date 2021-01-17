@@ -104,7 +104,10 @@ void UCI::uci_position(std::istream& command) {
   if (token != "moves") { printError("Invalid position command"); return; }
 
   // In order to distinguish move types (e.g. castling/enpassant), we need full move generation.
-  while (true) {
+  for (int i = 0; ; i++) {
+    // Reset when reaching stack limit
+    if (i + 1 == Position::kMaxDepth) { engine.position.reset(); i = 0; }
+
     auto s_move = readToken(command);
     if (s_move.empty()) { break; }
 
@@ -119,6 +122,7 @@ void UCI::uci_position(std::istream& command) {
     }
     assert(found);
   }
+
   engine.position.reset();
 }
 
