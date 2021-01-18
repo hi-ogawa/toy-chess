@@ -64,12 +64,6 @@ struct UCITester {
     for (auto output : outputs) { ok &= (getLine() == output); }
     return ok;
   }
-
-  template<class F>
-  void putAndCheck_v2(const string& input, const vector<string>& outputs, F check) {
-    putLine(input);
-    for (auto output : outputs) { check(getLine(), output); }
-  }
 };
 
 
@@ -79,6 +73,7 @@ TEST_CASE("UCI") {
   CHECK(tester.putAndCheck("uci", {{
     "name toy-chess",
     "author hiro18181",
+    "option name WeightFile type string default <embedded-weight>",
     "uciok",
   }}) == 1);
 

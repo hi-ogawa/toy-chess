@@ -21,3 +21,9 @@ bash misc/match/prepare.sh 5662276
 # Run cutechess-cli
 ENGINE2="name=toy-chess-5662276 cmd=build/5662276/build/Release/main" bash misc/match/run.sh
 ```
+
+Match against different network
+
+```
+ENGINE2="name=toy-chess-ckpt cmd=build/Release/main option.WeightFile=$PWD/src/nn/data/ckpt-2021-01-16-07-11-46.bin" bash misc/match/run.sh
+```

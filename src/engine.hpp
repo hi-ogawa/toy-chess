@@ -73,7 +73,7 @@ struct Engine {
   array<SearchState, Position::kMaxDepth> search_state_stack;
 
   Engine() {
-    evaluator.loadEmbeddedWeight();
+    load(kEmbeddedWeightName);
     position.evaluator = &evaluator;
     position.reset();
     transposition_table.resizeMB(kDefaultTableSizeMB);
@@ -99,7 +99,14 @@ struct Engine {
 
   Score quiescenceSearch(Score, Score, int, SearchResult&);
 
-  void load(const string& filename) { evaluator.load(filename); }
+  static inline const string kEmbeddedWeightName = "<embedded-weight>";
+  void load(const string& filename) {
+    if (filename == kEmbeddedWeightName) {
+      evaluator.loadEmbeddedWeight();
+    } else {
+      evaluator.load(filename);
+    }
+  }
 
   void print(std::ostream&);
 };

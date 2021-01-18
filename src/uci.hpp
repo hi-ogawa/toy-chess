@@ -54,6 +54,7 @@ struct UCI {
   void uci_uci(std::istream&) {
     print("name toy-chess");
     print("author hiro18181");
+    print("option name WeightFile type string default " + Engine::kEmbeddedWeightName);
     print("uciok");
   }
 
@@ -70,6 +71,9 @@ struct UCI {
     // setoption name <id> [value <x>]
     ASSERT(readToken(command) == "name");
     auto id = readToken(command);
+    ASSERT(readToken(command) == "value");
+    auto value = readToken(command);
+    if (id == "WeightFile") { engine.load(value); return; }
     printError("Unsupported command [setoption name " + id + " ...]");
   }
 
@@ -78,6 +82,7 @@ struct UCI {
   }
 
   void uci_ucinewgame(std::istream&) {
+    engine.stop();
     engine.reset();
   }
 

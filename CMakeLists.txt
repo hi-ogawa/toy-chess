@@ -37,7 +37,7 @@ include_directories(${CMAKE_CURRENT_BINARY_DIR})
 configure_file(src/config.hpp.in ${CMAKE_CURRENT_BINARY_DIR}/config.hpp @ONLY)
 
 #
-# embedded_weight.cpp (TODO: make it override-able)
+# embedded_weight.cpp
 #
 set(NN_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src/nn)
 set(WEIGHT_FILE ${NN_DIR}/data/default.bin)
