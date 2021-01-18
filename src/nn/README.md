@@ -25,7 +25,10 @@ python src/nn/training/main.py \
   --command=process_model_parameters
 ```
 
-Training on Google Colab (example: https://colab.research.google.com/drive/1r01G0vpKv9HBA06uOMk9RoRydihCpoUi)
+Training on Google Colab
+
+- Colab notebook: https://colab.research.google.com/drive/1r01G0vpKv9HBA06uOMk9RoRydihCpoUi
+- Google drive : https://drive.google.com/drive/folders/19Sd_iP8t0_r_XkIu-ibfJ7yzY9M3rkLi?usp=sharing
 
 ```
 # Use google drive to download dataset (.binpack) and save checkpoints (.pt)

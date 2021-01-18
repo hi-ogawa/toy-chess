@@ -16,3 +16,7 @@ Benchmark
 ```
 python script.py run --e main_bench -- -s
 ```
+
+For training neural network, see `src/nn/README.md`.
+
+For deploying lichess bot, see `misc/bot/README.md`.
