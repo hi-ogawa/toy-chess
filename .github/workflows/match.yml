@@ -10,6 +10,10 @@ on:
         description: Stockfish ELO
         required: true
         default: 1500
+      concurrency:
+        description: Concurrency of matches
+        required: true
+        default: 2
 jobs:
   match:
     name: Match
@@ -26,12 +30,14 @@ jobs:
       - name: Download opening book
         run: wget -P misc/match/data https://github.com/official-stockfish/books/raw/master/8moves_v3.pgn.zip && unzip -d misc/match/data misc/match/data/8moves_v3.pgn.zip
       - name: Build toy-chess
-        run: python script.py init --clang && python script.py build
+        run: python script.py init --clang && python script.py build --t main
       - name: Build stockfish
         run: make -C thirdparty/Stockfish/src -j build
       - name: === Match ===
-        run: CLI=cutechess-cli/cutechess-cli.sh ROUNDS=${{ github.event.inputs.rounds }} SF_ELO=${{ github.event.inputs.sf_elo }} bash misc/match/run.sh
+        run: CLI=cutechess-cli/cutechess-cli.sh CONCURRENCY=${{ github.event.inputs.concurrency }} ROUNDS=${{ github.event.inputs.rounds }} SF_ELO=${{ github.event.inputs.sf_elo }} bash misc/match/run.sh
       - uses: actions/upload-artifact@v2
         with:
-          name: match-results
-          path: misc/match/data/result-*.pgn
+          name: artifact
+          path: |
+            misc/match/data/result-*.pgn
+            misc/match/data/log-*.txt
