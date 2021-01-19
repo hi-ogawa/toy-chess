@@ -12,14 +12,14 @@ make -C thirdparty/Stockfish/src -j build
 bash misc/match/run.sh
 ```
 
-Match against specific commit
+Match against specific branch or commit
 
 ```
-# Build specific commit
-bash misc/match/prepare.sh 5662276
+# Build engine from master branch
+bash misc/match/prepare.sh master
 
 # Run cutechess-cli
-ENGINE2="name=toy-chess-5662276 cmd=build/5662276/build/Release/main" bash misc/match/run.sh
+ENGINE2="name=toy-chess-master cmd=build/master/build/Release/main" bash misc/match/run.sh
 ```
 
 Match against different network

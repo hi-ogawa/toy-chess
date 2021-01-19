@@ -166,6 +166,14 @@ void Position::printFen(std::ostream& ostr) const {
   ostr << ((game_ply / 2) + 1);
 }
 
+namespace {
+  string toLichessURL(const string& fen) {
+    string res = "https://lichess.org/editor/" + fen;
+    for (auto& c : res) { if (c == ' ') { c = '_'; } }
+    return res;
+  }
+};
+
 void Position::print(std::ostream& ostr) const {
   auto char_board = toCharBoard();
   for (int i = 7; i >= 0; i--) {
@@ -179,8 +187,9 @@ void Position::print(std::ostream& ostr) const {
   ostr << "  a   b   c   d   e   f   g   h  " << "\n";
   ostr << "\n";
   ostr << "Key: "; Zobrist::print(state->key, ostr); ostr << "\n";
-  ostr << "Fen: "; printFen(ostr);
-  ostr << "\n";
+  auto fen = toFen();
+  ostr << "Fen: "; ostr << fen << "\n";
+  ostr << "LichessURL: "; ostr << toLichessURL(fen) << "\n";
 }
 
 
@@ -699,6 +708,85 @@ bool Position::isLegal(const Move& move) const {
   }
 
   return 1;
+}
+
+Score Position::evaluateCapture(const Move& move) {
+  // TODO: Handle promotion exchange properly
+  if (move.type() == kPromotion) { return kPieceValue[move.promotionType()] - kPieceValue[kPawn]; }
+
+  PieceType attackee = kNoPieceType;
+  if (move.type() == kEnpassant) {
+    attackee = kPawn;
+  } else {
+    attackee = piece_on[!side_to_move][move.to()];
+  }
+  ASSERT(attackee != kNoPieceType);
+  makeMove(move);
+  Score score = kPieceValue[attackee] - computeSEE(move.to());
+  unmakeMove(move);
+  return score;
+}
+
+Score Position::computeSEE(Square to) {
+  // Capture by least valuable attacker
+  Move move = getLVA(side_to_move, to);
+  if (!move) { return 0; }
+
+  PieceType attacker = piece_on[side_to_move][move.from()];
+  PieceType attackee = piece_on[!side_to_move][to];
+  ASSERT(attacker != kNoPieceType);
+  ASSERT(attackee != kNoPieceType);
+  ASSERT(attackee != kKing);
+  makeMove(move);
+  Score score = std::max<Score>(0, kPieceValue[attackee] - computeSEE(to));
+  unmakeMove(move);
+  return score;
+}
+
+Move Position::getLVA(Color own, Square to) const {
+  // TODO: Acount for promoted piece value
+  bool is_backrank = SQ::toRank(to) == kBackrank[!side_to_move];
+
+  auto find_pawn_move = [&]() -> Move {
+    Board candidates = pieces[own][kPawn] & pawn_attack_table[!own][to];
+    for (auto from : toSQ(candidates)) {
+      Move move = is_backrank ? Move(from, to, kPromotion, kQueen) : Move(from, to);
+      if (isLegal(move)) { return move; }
+    }
+    return kNoneMove;
+  };
+
+  auto find_move = [&](Board candidates) -> Move {
+    for (auto from : toSQ(candidates)) {
+      Move move(from, to);
+      if (isLegal(move)) { return move; }
+    }
+    return kNoneMove;
+  };
+
+  // P
+  if (!is_backrank) { if (auto m = find_pawn_move()) { return m; } }
+
+  // N
+  if (auto m = find_move(pieces[own][kKnight] & knight_attack_table[to]))  { return m; }
+
+  // BRQ
+  Board occ = occupancy[kBoth];
+  if (auto m = find_move(pieces[own][kBishop] & getBishopAttack(to, occ))) { return m; }
+  if (auto m = find_move(pieces[own][kRook]   & getRookAttack(to, occ)))   { return m; }
+  if (auto m = find_move(pieces[own][kQueen]  & getQueenAttack(to, occ)))  { return m; }
+
+  // P => Q
+  if (is_backrank) { if (auto m = find_pawn_move()) { return m; } }
+
+  // K
+  if (auto m = find_move(pieces[own][kKing]   & king_attack_table[to]))    { return m; }
+
+  return kNoneMove;
+}
+
+bool Position::isCapture(const Move& move) {
+  return move.type() == kEnpassant || piece_on[!side_to_move][move.to()] != kNoPieceType;
 }
 
 int64_t Position::perft(int depth, int debug) {

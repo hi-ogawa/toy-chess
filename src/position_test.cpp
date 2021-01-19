@@ -26,7 +26,8 @@ TEST_CASE("Position::print") {
     "  a   b   c   d   e   f   g   h  \n"
     "\n"
     "Key: 0x3d46308f5f0dec7c\n"
-    "Fen: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1\n";
+    "Fen: rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1\n"
+    "LichessURL: https://lichess.org/editor/rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR_w_KQkq_-_0_1\n";
   CHECK(toString(pos) == expected);
 }
 
@@ -97,4 +98,27 @@ TEST_CASE("Position::State::key") {
   auto key3 = pos.state->key;
   CHECK(key1 != key2);
   CHECK(key1 == key3);
+}
+
+TEST_CASE("Position::evaluateCapture") {
+  auto fen = "r1bqk2r/ppp2ppp/2n1pn2/8/1b1pP3/PPNP4/1BPQ1PPP/R3KBNR b KQkq - 0 1";
+  Position pos(fen);
+
+  //
+  //   Black move d4c3
+  //
+  // +---+---+---+---+-...-+
+  // |   | b |   | p | ... | 4
+  // +---+---+---+---+-...-+
+  // | P | P | N | P | ... | 3
+  // +---+---+---+---+-...-+
+  // |   | B | P | Q | ... | 2
+  // +---+---+---+---+-...-+
+  // | R |   |   |   | ... | 1
+  // +---+---+---+---+-...-+
+  //   a   b   c   d
+  //
+  Score acutal = pos.evaluateCapture(Move(kD4, kC3));
+  Score expected = kPieceValue[kKnight] - kPieceValue[kPawn] + kPieceValue[kBishop] - kPieceValue[kBishop];
+  CHECK(acutal == expected);
 }

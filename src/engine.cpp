@@ -133,42 +133,87 @@ SearchResult Engine::search(int depth) {
 }
 
 Score Engine::quiescenceSearch(Score alpha, Score beta, int depth, SearchResult& result) {
-  if (!checkSearchLimit()) { return -kScoreInf; }
+  if (!checkSearchLimit()) { return position.evaluate(); }
   result.num_nodes++;
-
-  constexpr int kMaxQuiescenceDepth = 8; // TODO: Not sure about its significance
-
-  // Stand pat
-  Score score = position.evaluate();
-  if (depth == kMaxQuiescenceDepth) { return score; }
-
-  if (beta < score) { return score; }
-  if (alpha < score) { alpha = score; }
 
   auto& tt_entry = transposition_table.probe(position.state->key);
 
-  // Recursive capture moves
-  generateMoves(tt_entry, /* quiescence */ 1);
-  while (auto move = getNextMove()) {
-    if (!checkSearchLimit()) { break; }
-    if (!position.isLegal(move)) { continue; }
+  Move best_move = kNoneMove;
+  NodeType node_type = kAllNode;
+  Score score = kNoneScore;
+  Score evaluation = kNoneScore;
 
-    position.makeMove(move);
-    state++;
-    score = std::max<Score>(score, -quiescenceSearch(-beta, -alpha, depth + 1, result));
-    state--;
-    position.unmakeMove(move);
-    if (beta < score) { return score; }
-    if (alpha < score) { alpha = score; }
-  }
+  ([&]() {
 
+    // NOTE: this blindly ignores key collision
+    if (tt_entry.hit) {
+      // Hash score beta cut
+      if (tt_entry.node_type != kAllNode) {
+        if (beta <= tt_entry.score && position.isPseudoLegal(tt_entry.move) && position.isLegal(tt_entry.move)) {
+          score = tt_entry.score;
+          node_type = kCutNode;
+          best_move = tt_entry.move;
+          return;
+        }
+      }
+
+      // Hash evaluation
+      score = evaluation = tt_entry.evaluation;
+    }
+
+    // Static evaluation
+    if (score == kNoneScore) { score = evaluation = position.evaluate(); }
+
+    // Stand pat beta cut
+    if (beta <= score) {
+      node_type = kCutNode;
+      return;
+    }
+    if (alpha < score) {
+      node_type = kPVNode;
+      alpha = score;
+    }
+
+    // Recursively search capture/promotion moves
+    generateMoves(tt_entry, /* quiescence */ 1);
+    while (auto move = getNextMove()) {
+      if (!position.isLegal(move)) { continue; }
+
+      position.makeMove(move);
+      state++;
+      score = std::max<Score>(score, -quiescenceSearch(-beta, -alpha, depth + 1, result));
+      state--;
+      position.unmakeMove(move);
+      if (beta < score) {
+        node_type = kCutNode;
+        best_move = move;
+        return;
+      }
+      if (alpha < score) {
+        node_type = kPVNode;
+        alpha = score;
+      }
+    }
+
+    // TODO: Handle checkmate/stalemate within quiescence search.
+    //       Problem is that currently above move generation doesn't include evasions.
+
+  })();
+
+  ASSERT(-kScoreInf < score && score < kScoreInf);
+  tt_entry.hit = 1;
+  tt_entry.key = position.state->key;
+  tt_entry.node_type = node_type;
+  tt_entry.move = best_move;
+  tt_entry.score = score;
+  tt_entry.evaluation = evaluation;
+  tt_entry.depth = 0;
   return score;
 }
 
 Score Engine::searchImpl(Score alpha, Score beta, int depth, int depth_end, SearchResult& result) {
-  if (!checkSearchLimit()) { return -kScoreInf; }
+  if (!checkSearchLimit()) { return position.evaluate(); }
 
-  // TODO Save quiescence search score in tt_entry
   if (depth == depth_end) { return quiescenceSearch(alpha, beta, 0, result); }
 
   result.num_nodes++;
@@ -184,12 +229,13 @@ Score Engine::searchImpl(Score alpha, Score beta, int depth, int depth_end, Sear
   // Use lambda to skip from anywhere to the end
   ([&]() {
 
-    // Hash score beta cut (NOTE: this can be wrong score due to key collision)
+    // Hash score beta cut (NOTE: this blindly ignores key collision)
     if (tt_entry.hit && depth_to_go <= tt_entry.depth && tt_entry.node_type != kAllNode) {
       if (beta <= tt_entry.score && position.isPseudoLegal(tt_entry.move) && position.isLegal(tt_entry.move)) {
         score = tt_entry.score;
         node_type = kCutNode;
         best_move = tt_entry.move;
+        updateKiller(tt_entry.move);
         return;
       }
     }
@@ -197,7 +243,6 @@ Score Engine::searchImpl(Score alpha, Score beta, int depth, int depth_end, Sear
     int move_cnt = 0;
     generateMoves(tt_entry);
     while (auto move = getNextMove()) {
-      if (!checkSearchLimit()) { return; }
       if (!position.isLegal(move)) { continue; }
       move_cnt++;
 
@@ -209,6 +254,7 @@ Score Engine::searchImpl(Score alpha, Score beta, int depth, int depth_end, Sear
       if (beta <= score) { // beta cut
         node_type = kCutNode;
         best_move = move;
+        updateKiller(move);
         return;
       }
       if (alpha < score) { // pv
@@ -234,13 +280,17 @@ Score Engine::searchImpl(Score alpha, Score beta, int depth, int depth_end, Sear
     }
   })(); // lambda end
 
+  ASSERT(-kScoreInf < score && score < kScoreInf);
   tt_entry.hit = 1;
   tt_entry.key = position.state->key;
   tt_entry.node_type = node_type;
   tt_entry.move = best_move;
   tt_entry.score = score;
   tt_entry.depth = depth_to_go;
-  state->pv[depth] = best_move;
+
+  // Update pv
+  if (node_type == kPVNode) { state->pv[depth] = best_move; }
+
   return score;
 }
 
@@ -259,20 +309,44 @@ void Engine::generateMoves(const TTEntry& tt_entry, bool quiescence) {
     }
   }
 
-  // Capture moves
+
+  // Capture/Promotion moves
+  // TODO: Don't repeat hash move
+  // TODO: Postpone bad captures after killer and quiet
+  // TODO: Score promotion properly
   state->move_generators.put([&](auto& ls) {
-    position.generateMoves(ls, kGenerateCapture);
-    // TODO: SEE, MVV-LVA, etc...
-    std::sort(ls.begin(), ls.end(), [](auto x, auto y) { return x.second < y.second; });
+    MoveList ls_tmp;
+    position.generateMoves(ls_tmp, kGenerateCapture);
+    for (auto& [move, score] : ls_tmp) {
+      // TODO: Avoid duplicated legality check in "searchImpl" and "quiescenceSearch"
+      if (!position.isLegal(move)) { continue; }
+
+      // Assign SEE score
+      Score see_score = position.evaluateCapture(move);
+      if (quiescence && see_score <= 0) { continue; } // Skip bad SEE in quiescence
+
+      ls.put({move, see_score});
+    }
+
+    // Sort by SEE score
+    std::sort(ls.begin(), ls.end(), [](auto x, auto y) { return x.second > y.second; });
   });
 
-  // TODO: Killer moves
+  // Killer moves
+  if (!quiescence) {
+    state->move_generators.put([&](auto& ls) {
+      for (auto move : state->killers) {
+        if (!position.isCapture(move) && position.isPseudoLegal(move)) {
+          ls.put({move, kKillerScore});
+        }
+      }
+    });
+  }
 
   // Quiet moves
   if (!quiescence) {
     state->move_generators.put([&](auto& ls) {
       position.generateMoves(ls, kGenerateQuiet);
-      // TODO: History heuristics etc...
       std::sort(ls.begin(), ls.end(), [](auto x, auto y) { return x.second < y.second; });
     });
   }
@@ -284,4 +358,11 @@ Move Engine::getNextMove() {
     state->move_generators.get()(state->move_list);
   }
   return state->move_list.get().first;
+}
+
+void Engine::updateKiller(const Move& move) {
+  auto& [m0, m1] = state->killers;
+  if (m0 == move) { return; }
+  m1 = move;
+  std::swap(m0, m1);
 }

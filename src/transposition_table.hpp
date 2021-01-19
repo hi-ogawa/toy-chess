@@ -27,14 +27,15 @@ enum NodeType : uint8_t { kPVNode, kCutNode, kAllNode };
 struct TranspositionTable {
 
   struct alignas(16) Entry {
-    Zobrist::Key key; // 8
-    Move move; // 2
-    Score score; // 2
+    Zobrist::Key key; // 8 (TODO: Use only upper half bits)
+    Move move = kNoneMove; // 2
+    Score score = kNoneScore; // 2
+    Score evaluation = kNoneScore; // 2
     NodeType node_type; // 1
     uint8_t depth = 0; // 1
     bool hit = 0;
   };
-  static_assert(sizeof(Entry) == 16);
+  static_assert(sizeof(Entry) == 32);
 
   size_t size = 0;
   vector<Entry> data;

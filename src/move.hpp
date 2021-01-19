@@ -28,6 +28,8 @@ struct Move {
   }
 
   operator bool() { return data != 0; }
+  bool operator==(const Move& other) { return data == other.data; }
+  bool operator!=(const Move& other) { return data != other.data; }
 
   Square from() const { return Square(data & 0b111111U); }
 

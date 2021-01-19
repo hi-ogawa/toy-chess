@@ -49,6 +49,7 @@ struct SearchState {
   array<Move, Position::kMaxDepth> pv;
   MoveList move_list;
   SimpleQueue<std::function<void(MoveList&)>, 4> move_generators; // hash, capture, killer, quiet
+  array<Move, 2> killers = {};
 };
 
 
@@ -99,8 +100,11 @@ struct Engine {
   SearchResult search(int);
   Score searchImpl(Score, Score, int, int, SearchResult&);
   Score quiescenceSearch(Score, Score, int, SearchResult&);
+
   void generateMoves(const TTEntry&, bool quiescence = 0);
   Move getNextMove();
+
+  void updateKiller(const Move&);
 
   // Misc
   void print(std::ostream&);

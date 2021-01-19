@@ -93,7 +93,7 @@ struct SQ {
   }
 
   static inline File toFile(Square sq) { return sq % 8; }
-  static inline File toRank(Square sq) { return sq / 8; }
+  static inline Rank toRank(Square sq) { return sq / 8; }
 
   static inline Square flipFile(Square sq) { return sq ^ 7; }
   static inline Square flipRank(Square sq) { return sq ^ (7 << 3); }

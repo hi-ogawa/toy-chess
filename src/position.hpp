@@ -124,4 +124,13 @@ struct Position {
   Score evaluateLeaf(int depth) const {
     return state->checkers ? -Evaluation::mateScore(depth) : kScoreDraw;
   };
+
+  //
+  // Static exchange evaluation
+  //
+  Score evaluateCapture(const Move&);
+  Score computeSEE(Square);
+  Move getLVA(Color, Square) const; // least valuable attacker
+
+  bool isCapture(const Move&);
 };
