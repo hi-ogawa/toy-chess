@@ -111,16 +111,18 @@ void UCI::uci_position(std::istream& command) {
     auto s_move = readToken(command);
     if (s_move.empty()) { break; }
 
-    engine.position.generateMoves();
+    MoveList move_list;
+    engine.position.generateMoves(move_list);
     bool found = 0;
-    while (auto move = engine.position.move_list->getNext()) {
-      if (toString(*move) == s_move) {
+    for (auto [move, _score] : move_list) {
+      if (!engine.position.isLegal(move)) { continue; }
+      if (toString(move) == s_move) {
         found = 1;
-        engine.position.makeMove(*move);
+        engine.position.makeMove(move);
         break;
       }
     }
-    assert(found);
+    ASSERT(found);
   }
 
   engine.position.reset();

@@ -237,6 +237,20 @@ array<Board, 2> Position::getPawnPush(Color own) const {
   return {push1, push2};
 }
 
+array<Board, 2> Position::getPawnCapture(Color own) const {
+  Board l, r;
+  if (own == kWhite) {
+    auto b_push = pieces[own][kPawn] << 8;
+    r = (b_push & ~BB::fromFile(kFileH)) << 1;
+    l = (b_push & ~BB::fromFile(kFileA)) >> 1;
+  } else {
+    auto b_push = pieces[own][kPawn] >> 8;
+    r = (b_push & ~BB::fromFile(kFileH)) << 1;
+    l = (b_push & ~BB::fromFile(kFileA)) >> 1;
+  }
+  return {r, l};
+}
+
 //
 // Make/unmake move
 //
@@ -426,148 +440,132 @@ void Position::unmakeMove(const Move& move) {
 // Move generation
 //
 
-void Position::generateMoves(bool only_capture) {
-  move_list->initialize(this);
-
-  Color own = side_to_move, opp = !own;
-  Board& occ = occupancy[kBoth];
-  Board& own_occ = occupancy[own];
-  Board& opp_occ = occupancy[opp];
+void Position::generateMoves(MoveList& move_list, MoveGenerationType movegen_type) {
+  Color own = side_to_move;
+  Board occ = occupancy[kBoth];
+  Board opp_occ = occupancy[!own];
   Square king_sq = kingSQ(own);
 
-  bool checked = state->checkers;
-  bool multiple_checked = toSQ(state->checkers).size() >= 2;
+  bool in_check = state->checkers;
+  bool in_multi_check = toSQ(state->checkers).size() >= 2;
 
   // "to" Target for non-king pieces
-  Board target = 0;
+  Board c_target = 0; // capture
+  Board q_target = 0; // non capture (quiet)
+  Board king_c_target = opp_occ;
+  Board king_q_target = ~occ;
 
-  if (!checked) {
-    // Quiet or Capture
-    target = only_capture ? opp_occ : ~own_occ;
+  // Not in check
+  if (!in_check) {
+    c_target = opp_occ;
+    q_target = ~occ;
   }
 
-  if (checked && !multiple_checked) {
-    // Block or Capture single checker
-    if (only_capture) {
-      target = state->checkers;
-
-    } else {
-      Square checker_sq = toSQ(state->checkers).front();
-      target = state->checkers | in_between_table[king_sq][checker_sq];
-    }
+  // In single check
+  if (in_check && !in_multi_check) {
+    // Capture/Block single checker
+    c_target = state->checkers;
+    q_target = in_between_table[king_sq][toSQ(state->checkers).front()];
   }
 
-  if (!multiple_checked) {
-    // Pawn
-    {
-      // TODO: Stockfish includes good promotions as "only_capture"
-      if (!only_capture) {
-        // Push
-        auto [push1, push2] = getPawnPush(own);
-        push1 &= target;
-        push2 &= target;
-        for (auto to : toSQ(push1 & kBackrankBB[opp])) { // Promotion
-          auto from = to - kPawnPushDirs[own];
-          for (auto type : {kQueen, kKnight, kBishop, kRook}) {
-            Move move(from, to, kPromotion, type);
-            move_list->insert(move);
-          }
-        }
-        for (auto to : toSQ(push1 & ~kBackrankBB[opp])) { // Non-promotion
-          auto from = to - kPawnPushDirs[own];
-          move_list->insert(Move(from, to));
-        }
-        for (auto to : toSQ(push2)) { // Double push
-          auto from = to - 2 * kPawnPushDirs[own];
-          move_list->insert(Move(from, to));
-        }
+  // Pawn
+  if (!in_multi_check) {
+    // Include Queen/Night promotions in "kGenerateCapture"
+    Position::generatePawnPushMoves(move_list, own, q_target, movegen_type);
+    Position::generatePawnCaptureMoves(move_list, own, c_target, movegen_type);
+  }
+
+  // Simple generation for Non pawn pieces
+  auto generate_simple_moves = [&](Board b_from, auto func_generate_to, Board c_target, Board q_target) {
+    for (auto from : toSQ(b_from)) {
+      Board b_to = func_generate_to(from);
+      if (movegen_type & kGenerateCapture) {
+        for (auto to : toSQ(b_to & c_target)) { move_list.put({Move(from, to), kCaptureScore}); }
       }
-
-      Position::generatePawnCaptureMoves(own);
-    }
-
-    // Knight
-    for (auto from : toSQ(pieces[own][kKnight])) {
-      for (auto to : toSQ(knight_attack_table[from] & target)) {
-        move_list->insert(Move(from, to));
+      if (movegen_type & kGenerateQuiet) {
+        for (auto to : toSQ(b_to & q_target)) { move_list.put({Move(from, to), kQuietScore}); }
       }
     }
+  };
 
-    // Bishop
-    for (auto from : toSQ(pieces[own][kBishop])) {
-      for (auto to : toSQ(getBishopAttack(from, occ) & target)) {
-        move_list->insert(Move(from, to));
-      }
-    }
-
-    // Rook
-    for (auto from : toSQ(pieces[own][kRook])) {
-      for (auto to : toSQ(getRookAttack(from, occ) & target)) {
-        move_list->insert(Move(from, to));
-      }
-    }
-
-    // Queen
-    for (auto from : toSQ(pieces[own][kQueen])) {
-      for (auto to : toSQ(getQueenAttack(from, occ) & target)) {
-        move_list->insert(Move(from, to));
-      }
-    }
+  // Knight, Bishop, Rook, Queen
+  if (!in_multi_check) {
+    generate_simple_moves(pieces[own][kKnight], [&](Square from) { return knight_attack_table[from]; } , c_target, q_target);
+    generate_simple_moves(pieces[own][kBishop], [&](Square from) { return getBishopAttack(from, occ); }, c_target, q_target);
+    generate_simple_moves(pieces[own][kRook  ], [&](Square from) { return getRookAttack(from, occ); }  , c_target, q_target);
+    generate_simple_moves(pieces[own][kQueen ], [&](Square from) { return getQueenAttack(from, occ); } , c_target, q_target);
   }
 
   // King
-  Board king_target = only_capture ? opp_occ : ~own_occ;
-  for (auto from : toSQ(pieces[own][kKing])) {
-    for (auto to : toSQ(king_attack_table[from] & king_target)) {
-      move_list->insert(Move(from, to));
-    }
-  }
+  generate_simple_moves(pieces[own][kKing], [&](Square from) { return king_attack_table[from]; } , king_c_target, king_q_target);
 
   // Castling
-  if (!checked && !only_capture) {
+  if (!in_check && (movegen_type & kGenerateQuiet)) {
     for (auto side : {kOO, kOOO}) {
       if (!state->castling_rights[own][side]) { continue; }
       auto [king_from, king_to, rook_from, rook_to] = kCastlingMoves[own][side];
       if (in_between_table[king_from][rook_from] & occ) { continue; }
-      Move move(king_from, king_to, kCastling);
-      move_list->insert(move);
+      move_list.put({Move(king_from, king_to, kCastling), kCastlingScore});
     }
   }
 }
 
-void Position::generatePawnCaptureMoves(Color own) {
-  array<std::pair<Board, Direction>, 2> right_and_left;
-
-  if (own == kWhite) {
-    auto b_push = pieces[own][kPawn] << 8;
-    auto b_cap_r = (b_push & ~BB::fromFile(kFileH)) << 1;
-    auto b_cap_l = (b_push & ~BB::fromFile(kFileA)) >> 1;
-    right_and_left = {{ {b_cap_r, kDirNE}, {b_cap_l, kDirNW} }};
-  } else {
-    auto b_push = pieces[own][kPawn] >> 8;
-    auto b_cap_r = (b_push & ~BB::fromFile(kFileH)) << 1;
-    auto b_cap_l = (b_push & ~BB::fromFile(kFileA)) >> 1;
-    right_and_left = {{ {b_cap_r, kDirSE}, {b_cap_l, kDirSW} }};
+void Position::generatePawnPushMoves(MoveList& move_list, Color own, Board target, MoveGenerationType movegen_type) {
+  auto [push1, push2] = getPawnPush(own);
+  push1 &= target;
+  for (auto to : toSQ(push1 & kBackrankBB[!own])) { // Promotion
+    auto from = to - kPawnPushDirs[own];
+    if (movegen_type & kGenerateCapture) {
+      move_list.put({Move(from, to, kPromotion, kQueen), kPromotionQScore});
+      move_list.put({Move(from, to, kPromotion, kKnight), kPromotionNScore});
+    }
+    if (movegen_type & kGenerateQuiet) {
+      move_list.put({Move(from, to, kPromotion, kBishop), kPromotionBRScore});
+      move_list.put({Move(from, to, kPromotion, kRook), kPromotionBRScore});
+    }
   }
+  if (movegen_type & kGenerateQuiet) {
+    for (auto to : toSQ(push1 & ~kBackrankBB[!own])) { // Non-promotion
+      auto from = to - kPawnPushDirs[own];
+      move_list.put({Move(from, to), kQuietScore});
+    }
+    push2 &= target;
+    for (auto to : toSQ(push2)) { // Double push
+      auto from = to - 2 * kPawnPushDirs[own];
+      move_list.put({Move(from, to), kQuietScore});
+    }
+  }
+}
 
-  for (auto [b_cap, dir] : right_and_left) {
+void Position::generatePawnCaptureMoves(MoveList& move_list, Color own, Board target, MoveGenerationType movegen_type) {
+  auto right_and_left = getPawnCapture(own);
+  for (int i = 0; i < 2; i++) {
+    Board b_cap = right_and_left[i];
+    Direction dir = kPawnCaptureDirs[own][i];
     // Promotion
-    for (auto to : toSQ(b_cap & occupancy[!own] &  kBackrankBB[!own])) {
+    for (auto to : toSQ(target & b_cap & occupancy[!own] &  kBackrankBB[!own])) {
       Square from = to - dir;
-      for (auto type : {kQueen, kKnight, kBishop, kRook}) {
-        move_list->insert(Move(from, to, kPromotion, type));
+      if (movegen_type & kGenerateCapture) {
+        move_list.put({Move(from, to, kPromotion, kQueen), kPromotionQScore});
+        move_list.put({Move(from, to, kPromotion, kKnight), kPromotionNScore});
+      }
+      if (movegen_type & kGenerateQuiet) {
+        move_list.put({Move(from, to, kPromotion, kBishop), kPromotionBRScore});
+        move_list.put({Move(from, to, kPromotion, kRook), kPromotionBRScore});
       }
     }
-    // Non promotion
-    for (auto to : toSQ(b_cap & occupancy[!own] & ~kBackrankBB[!own])) {
-      Square from = to - dir;
-      move_list->insert(Move(from, to));
-    }
-    // En passant
-    if (b_cap & state->ep_square) {
-      auto to = toSQ(state->ep_square).front();
-      Square from = to - dir;
-      move_list->insert(Move(from, to, kEnpassant));
+    if (movegen_type & kGenerateCapture) {
+      // Non promotion
+      for (auto to : toSQ(target & b_cap & occupancy[!own] & ~kBackrankBB[!own])) {
+        Square from = to - dir;
+        move_list.put({Move(from, to), kCaptureScore});
+      }
+      // En passant
+      if (b_cap & state->ep_square) {
+        auto to = toSQ(state->ep_square).front();
+        Square from = to - dir;
+        move_list.put({Move(from, to, kEnpassant), kCaptureScore});
+      }
     }
   }
 }
@@ -707,14 +705,17 @@ int64_t Position::perft(int depth, int debug) {
   assert(depth >= 0);
   if (depth == 0) { return 1; }
   int64_t res = 0;
-  generateMoves();
-  while (auto move = move_list->getNext()) {
+  MoveList move_list;
+  generateMoves(move_list);
+  for (auto [move, _score] : move_list) {
+    if (!isLegal(move)) { continue; }
+
     if (depth == 1) { res++; continue; }
-    makeMove(*move);
-    if (debug >= 1) { dbg(depth, *move); }
+    makeMove(move);
+    if (debug >= 1) { dbg(depth, move); }
     if (debug >= 2) { print(); }
     res += perft(depth - 1, debug);
-    unmakeMove(*move);
+    unmakeMove(move);
   }
   return res;
 }
@@ -722,13 +723,17 @@ int64_t Position::perft(int depth, int debug) {
 vector<pair<Move, int64_t>> Position::divide(int depth, int debug) {
   assert(depth >= 1);
   vector<pair<Move, int64_t>> res;
-  generateMoves();
-  while (auto move = move_list->getNext()) {
-    makeMove(*move);
-    if (debug >= 1) { dbg(depth, *move); }
+
+  MoveList move_list;
+  generateMoves(move_list);
+  for (auto [move, _score] : move_list) {
+    if (!isLegal(move)) { continue; }
+
+    makeMove(move);
+    if (debug >= 1) { dbg(depth, move); }
     if (debug >= 2) { print(); }
-    res.push_back({*move, perft(depth - 1, debug)});
-    unmakeMove(*move);
+    res.push_back({move, perft(depth - 1, debug)});
+    unmakeMove(move);
   }
   return res;
 }

@@ -59,3 +59,5 @@ struct TranspositionTable {
     return value;
   }
 };
+
+using TTEntry = TranspositionTable::Entry;

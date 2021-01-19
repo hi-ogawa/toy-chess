@@ -12,6 +12,6 @@ fi
 
 cd $DIR
 git reset --hard $COMMIT
-git submodule update --init
+git submodule update --init --depth 1 --progress
 python script.py init --clang
 python script.py build --t main

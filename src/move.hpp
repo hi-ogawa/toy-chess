@@ -27,6 +27,8 @@ struct Move {
     data = (hi << 12) | (mi << 6) | lo;
   }
 
+  operator bool() { return data != 0; }
+
   Square from() const { return Square(data & 0b111111U); }
 
   Square to() const { return Square((data >> 6) & 0b111111U); }
@@ -56,3 +58,28 @@ struct Move {
 
   friend std::ostream& operator<<(std::ostream& ostr, const Move& self) { self.print(ostr); return ostr; }
 };
+
+inline const Move kNoneMove;
+
+//
+// Move score for ordering
+//
+using MoveScore = int16_t;
+enum : int16_t {
+  kHashScore,
+  kPromotionQScore,
+  kCaptureScore,
+  kKillerScore,
+  kCastlingScore,
+  kQuietScore,
+  kPromotionNScore,
+  kPromotionBRScore
+};
+
+enum MoveGenerationType : uint8_t {
+  kGenerateCapture = 1 << 0,
+  kGenerateQuiet = 1 << 1,
+  kGenerateAll = kGenerateCapture | kGenerateQuiet
+};
+
+using MoveList = SimpleQueue<std::pair<Move, MoveScore>, 256>;

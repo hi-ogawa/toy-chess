@@ -119,13 +119,13 @@ SearchResult Engine::search(int depth) {
   SearchResult res;
   res.depth = depth;
 
-  search_state = &search_state_stack[0];
+  state = &search_state_stack[0];
   res.score = searchImpl(-kScoreInf, kScoreInf, 0, depth, res);
   res.time = time_control.getTime() + 1;
 
   res.pv.resize(depth);
   for (int i = 0; i < depth; i++) {
-    res.pv[i] = search_state->pv[i];
+    res.pv[i] = state->pv[i];
     if (res.pv[i].type() == kNoMoveType) { break; }
   }
 
@@ -134,9 +134,9 @@ SearchResult Engine::search(int depth) {
 
 Score Engine::quiescenceSearch(Score alpha, Score beta, int depth, SearchResult& result) {
   if (!checkSearchLimit()) { return -kScoreInf; }
-
-  constexpr int kMaxQuiescenceDepth = 8;
   result.num_nodes++;
+
+  constexpr int kMaxQuiescenceDepth = 8; // TODO: Not sure about its significance
 
   // Stand pat
   Score score = position.evaluate();
@@ -145,14 +145,19 @@ Score Engine::quiescenceSearch(Score alpha, Score beta, int depth, SearchResult&
   if (beta < score) { return score; }
   if (alpha < score) { alpha = score; }
 
-  // Recursive capture moves
-  position.generateMoves(/* only_capture */ 1);
-  while (auto move = position.move_list->getNext()) {
-    if (!checkSearchLimit()) { break; }
+  auto& tt_entry = transposition_table.probe(position.state->key);
 
-    position.makeMove(*move);
+  // Recursive capture moves
+  generateMoves(tt_entry, /* quiescence */ 1);
+  while (auto move = getNextMove()) {
+    if (!checkSearchLimit()) { break; }
+    if (!position.isLegal(move)) { continue; }
+
+    position.makeMove(move);
+    state++;
     score = std::max<Score>(score, -quiescenceSearch(-beta, -alpha, depth + 1, result));
-    position.unmakeMove(*move);
+    state--;
+    position.unmakeMove(move);
     if (beta < score) { return score; }
     if (alpha < score) { alpha = score; }
   }
@@ -171,12 +176,10 @@ Score Engine::searchImpl(Score alpha, Score beta, int depth, int depth_end, Sear
   // NOTE: possible hit entry can be overwritten during recursive call of "searchImpl"
   auto& tt_entry = transposition_table.probe(position.state->key);
 
-  Move best_move;
+  Move best_move = kNoneMove; // None move indicates checkmate/stalemate
   NodeType node_type = kAllNode;
   Score score = -kScoreInf;
   int depth_to_go = depth_end - depth;
-
-  // TODO: Reduce copy-paste
 
   // Use lambda to skip from anywhere to the end
   ([&]() {
@@ -191,70 +194,42 @@ Score Engine::searchImpl(Score alpha, Score beta, int depth, int depth_end, Sear
       }
     }
 
-    if (tt_entry.hit && tt_entry.node_type != kAllNode) {
-      // Hash move
-      auto move = tt_entry.move;
-      if (position.isPseudoLegal(move) && position.isLegal(move)) {
-        position.makeMove(move);
-        search_state++;
-        score = std::max<Score>(score, -searchImpl(-beta, -alpha, depth + 1, depth_end, result));
-        search_state--;
-        position.unmakeMove(move);
-        if (beta <= score) { // beta cut
-          node_type = kCutNode;
-          best_move = move;
-          return;
-        }
-        if (alpha < score) { // pv
-          node_type = kPVNode;
-          alpha = score;
-          best_move = move;
-          for (int d = depth + 1; d < depth_end; d++) {
-            search_state->pv[d] = (search_state + 1)->pv[d];
-          }
-        }
-      }
-    }
-
-    // Children nodes
     int move_cnt = 0;
-    position.generateMoves();
-    while (auto move = position.move_list->getNext()) {
+    generateMoves(tt_entry);
+    while (auto move = getNextMove()) {
       if (!checkSearchLimit()) { return; }
-
+      if (!position.isLegal(move)) { continue; }
       move_cnt++;
-      position.makeMove(*move);
-      search_state++;
+
+      position.makeMove(move);
+      state++;
       score = std::max<Score>(score, -searchImpl(-beta, -alpha, depth + 1, depth_end, result));
-      search_state--;
-      position.unmakeMove(*move);
+      state--;
+      position.unmakeMove(move);
       if (beta <= score) { // beta cut
         node_type = kCutNode;
-        best_move = *move;
+        best_move = move;
         return;
       }
       if (alpha < score) { // pv
         node_type = kPVNode;
         alpha = score;
-        best_move = *move;
+        best_move = move;
         for (int d = depth + 1; d < depth_end; d++) {
-          search_state->pv[d] = (search_state + 1)->pv[d];
+          state->pv[d] = (state + 1)->pv[d];
         }
       }
     }
 
-    // Leaf node (checkmate or stalemate)
     if (move_cnt == 0) {
+      // Leaf node (checkmate or stalemate)
       score = std::max<Score>(score, position.evaluateLeaf(depth));
-      if (beta <= score) { // beta cut
+      if (beta <= score) {
         node_type = kCutNode;
-        best_move = Move(); // kNoMoveType in pv indicates checkmate/stalemate
         return;
       }
-      if (alpha < score) { // pv
+      if (alpha < score) {
         node_type = kPVNode;
-        alpha = score;
-        best_move = Move();
       }
     }
   })(); // lambda end
@@ -265,6 +240,48 @@ Score Engine::searchImpl(Score alpha, Score beta, int depth, int depth_end, Sear
   tt_entry.move = best_move;
   tt_entry.score = score;
   tt_entry.depth = depth_to_go;
-  search_state->pv[depth] = best_move;
+  state->pv[depth] = best_move;
   return score;
+}
+
+void Engine::generateMoves(const TTEntry& tt_entry, bool quiescence) {
+  state->move_list.clear();
+  state->move_generators.clear();
+
+  if (!quiescence) {
+    // Hash move
+    // TODO: There seems some tt related bug only in debug mode (which happens around checkmate/stalemate)
+    if (kBuildType == "Release" && tt_entry.hit && tt_entry.node_type != kAllNode) {
+      auto move = tt_entry.move;
+      if (position.isPseudoLegal(move)) {
+        state->move_generators.put([&](auto& ls) { ls.put({move, kHashScore}); });
+      }
+    }
+  }
+
+  // Capture moves
+  state->move_generators.put([&](auto& ls) {
+    position.generateMoves(ls, kGenerateCapture);
+    // TODO: SEE, MVV-LVA, etc...
+    std::sort(ls.begin(), ls.end(), [](auto x, auto y) { return x.second < y.second; });
+  });
+
+  // TODO: Killer moves
+
+  // Quiet moves
+  if (!quiescence) {
+    state->move_generators.put([&](auto& ls) {
+      position.generateMoves(ls, kGenerateQuiet);
+      // TODO: History heuristics etc...
+      std::sort(ls.begin(), ls.end(), [](auto x, auto y) { return x.second < y.second; });
+    });
+  }
+}
+
+Move Engine::getNextMove() {
+  while (state->move_list.empty()) {
+    if (state->move_generators.empty()) { return kNoneMove; }
+    state->move_generators.get()(state->move_list);
+  }
+  return state->move_list.get().first;
 }

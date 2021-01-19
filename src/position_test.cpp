@@ -42,10 +42,17 @@ TEST_CASE("Position::makeMove") {
 }
 
 TEST_CASE("Position::generateMoves") {
-  Position pos(kFenInitialPosition);
+  Position pos;
+  MoveList move_list;
+  pos.generateMoves(move_list);
+
+  vector<Move> moves;
+  for (auto [move, _score] : move_list) {
+    if (pos.isLegal(move)) { moves.push_back(move); }
+  }
+
   auto expected = "{a2a3, b2b3, c2c3, d2d3, e2e3, f2f3, g2g3, h2h3, a2a4, b2b4, c2c4, d2d4, e2e4, f2f4, g2g4, h2h4, b1a3, b1c3, g1f3, g1h3}";
-  pos.generateMoves();
-  CHECK(toString(pos.move_list->toVector()) == expected);
+  CHECK(toString(moves) == expected);
 }
 
 TEST_CASE("Position::isLegal") {

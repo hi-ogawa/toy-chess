@@ -47,6 +47,8 @@ struct TimeControl {
 
 struct SearchState {
   array<Move, Position::kMaxDepth> pv;
+  MoveList move_list;
+  SimpleQueue<std::function<void(MoveList&)>, 4> move_generators; // hash, capture, killer, quiet
 };
 
 
@@ -69,7 +71,7 @@ struct Engine {
   vector<SearchResult> results;
   std::function<void(const SearchResult&)> search_result_callback = [](auto){};
 
-  SearchState* search_state = nullptr;
+  SearchState* state = nullptr;
   array<SearchState, Position::kMaxDepth> search_state_stack;
 
   Engine() {
@@ -96,8 +98,12 @@ struct Engine {
   // Fixed depth alph-beta search (NOTE: Only usable from "go" method)
   SearchResult search(int);
   Score searchImpl(Score, Score, int, int, SearchResult&);
-
   Score quiescenceSearch(Score, Score, int, SearchResult&);
+  void generateMoves(const TTEntry&, bool quiescence = 0);
+  Move getNextMove();
+
+  // Misc
+  void print(std::ostream&);
 
   static inline const string kEmbeddedWeightName = "<embedded-weight>";
   void load(const string& filename) {
@@ -107,6 +113,4 @@ struct Engine {
       evaluator.load(filename);
     }
   }
-
-  void print(std::ostream&);
 };

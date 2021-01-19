@@ -35,10 +35,19 @@ string toString(const T& v) {
 // Assertion
 //
 
+// Always on
 #define ASSERT(EXPR) \
   if(!static_cast<bool>(EXPR)) { \
-    throw std::runtime_error{"[" __FILE__ ":" + std::to_string(__LINE__) + "] " #EXPR}; \
+    std::fprintf(stderr, "[%s:%d] ASSERT EXPR = (%s)\n", __FILE__, __LINE__, #EXPR); \
+    std::abort(); \
   }
+
+// Disabled on Release build
+#ifdef NDEBUG
+  #define ASSERT_HOT(EXPR)
+#else
+  #define ASSERT_HOT(EXPR) ASSERT(EXPR)
+#endif
 
 //
 // std::array utility
@@ -80,6 +89,23 @@ struct Rng {
     auto x = next(), y = next();
     return (uint64_t(x) << 32) | y;
   }
+};
+
+//
+// Fixed size queue
+//
+template<class T, size_t N>
+struct SimpleQueue {
+  array<T, N> data;
+  size_t first = 0, last = 0;
+
+  T& get() { ASSERT_HOT(first < last); return data[first++]; }
+  void put(const T& x) { ASSERT_HOT(last < N); data[last++] = x; }
+  bool empty() { return first == last; }
+  void clear() { first = last = 0; }
+
+  T* begin() { return &data[first]; }
+  T* end() { return &data[last]; }
 };
 
 //

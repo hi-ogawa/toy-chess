@@ -35,41 +35,6 @@ struct Position {
   const static inline int kMaxDepth = 256;
   array<State, kMaxDepth> state_stack;
 
-  // Fixed size move list with legality filtering
-  struct MoveList {
-    Position* position;
-    const static inline int kMaxSize = 256;
-    array<Move, kMaxSize> data = {};
-    int first = 0, last = 0;
-    int cnt = 0;
-
-    void initialize(Position* _position) {
-      position = _position;
-      first = last = cnt = 0;
-    }
-
-    void insert(const Move& move) { data[last++] = move; assert(last <= kMaxSize); }
-
-    Move* getNext() {
-      while (first < last) {
-        auto move = &data[first++];
-        if (position->isLegal(*move)) { cnt++; return move; }
-      }
-      return nullptr;
-    }
-
-    int size() { assert(first == last); return cnt; } // Must be called after "getNext" exhausted legal moves
-
-    vector<Move> toVector() {
-      vector<Move> res;
-      while (auto move = getNext()) { res.push_back(*move); }
-      return res;
-    }
-  };
-
-  MoveList* move_list;
-  array<MoveList, kMaxDepth> move_list_stack;
-
   Position(const string& fen = kFenInitialPosition) {
     initialize(fen);
   }
@@ -77,12 +42,7 @@ struct Position {
   void initialize(const string& fen) {
     state = &state_stack[0];
     *state = {};
-
-    move_list = &move_list_stack[0];
-    move_list->initialize(this);
-
     setFen(fen);
-
     recompute(2);
   }
 
@@ -92,14 +52,12 @@ struct Position {
   }
 
   void pushState() {
-    auto prev = state;
-    *(++state) = *prev;
-    (++move_list)->initialize(this);
+    state++;
+    *(state) = *(state - 1);
   }
 
   void popState() {
     state--;
-    move_list--;
   }
 
   void recompute(int);
@@ -122,6 +80,7 @@ struct Position {
   Board getBlockers(Color, Square) const;
   bool isPinned(Color, Square, Square, Square, Board) const;
   array<Board, 2> getPawnPush(Color) const;
+  array<Board, 2> getPawnCapture(Color) const;
 
   //
   // Make/Unmake move
@@ -135,11 +94,11 @@ struct Position {
   //
   // Move generation
   //
-
-  void generateMoves(bool only_capture = 0); // Generate pseudo legal moves
+  void generateMoves(MoveList&, MoveGenerationType movegen_type = kGenerateAll); // Generate pseudo legal moves
+  void generatePawnPushMoves(MoveList&, Color, Board, MoveGenerationType);
+  void generatePawnCaptureMoves(MoveList&, Color, Board, MoveGenerationType);
   bool isLegal(const Move& move) const; // Check legality of pseudo legal move
   bool isPseudoLegal(const Move& move) const; // Check pseudo legality of any move (used to validate tt move)
-  void generatePawnCaptureMoves(Color);
 
   //
   // Perft

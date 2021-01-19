@@ -21,7 +21,7 @@ TEST_CASE("Engine::go") {
   } else {
     fen = kFenMateIn2;
     depth = 4;
-    expected = "{h5h7, d7d8, g6g8, NONE}";
+    expected = "{h5h7, d7c8, g6g8, NONE}";
   }
 
   engine.position.initialize(fen);
