@@ -23,8 +23,9 @@ class MyModel(nn.Module):
   def __init__(self):
     super(MyModel, self).__init__()
     self.embedding = nn.Embedding(EMBEDDING_WIDTH, WIDTH2, padding_idx=EMBEDDING_PAD)
-    self.l1_bias = torch.nn.Parameter(torch.Tensor(WIDTH2))
-    torch.nn.init.normal_(self.l1_bias, 0, 0.1 / np.sqrt(32)) # Cf. https://github.com/glinscott/nnue-pytorch/issues/17#issuecomment-732788267
+    init_scale = np.sqrt(2 * 3 / WIDTH1) # cf. nn.init.kaiming_uniform_
+    nn.init.uniform_(self.embedding.weight, -init_scale, init_scale)
+    self.l1_bias = torch.nn.Parameter(torch.zeros(WIDTH2)) # NOTE: Not used currently
     self.l2 = nn.Linear(2 * WIDTH2, WIDTH3)
     self.l3 = nn.Linear(WIDTH3, WIDTH4)
     self.l4 = nn.Linear(WIDTH4, 1)
@@ -32,8 +33,8 @@ class MyModel(nn.Module):
   def forward(self, x_w, x_b):
     x_w = self.embedding(x_w)
     x_b = self.embedding(x_b)
-    x_w = torch.sum(x_w, dim=-2) + self.l1_bias
-    x_b = torch.sum(x_b, dim=-2) + self.l1_bias
+    x_w = torch.sum(x_w, dim=-2)
+    x_b = torch.sum(x_b, dim=-2)
     x = torch.cat([x_w, x_b], dim=-1)
     x = F.relu(x)
     x = self.l2(x)
@@ -122,6 +123,8 @@ MODEL_INIT_SEED = 0x12345678
 SCORE_SCALE = 208
 SCORE_TEMPO = 28
 
+DEBUG_CUDA_MEMORY = False
+
 def normalize_score(y):
   return (y - SCORE_TEMPO) / SCORE_SCALE
 
@@ -139,7 +142,7 @@ def my_loss_func(y_model, y_target, loss_mode):
     return F.binary_cross_entropy_with_logits(y_model, torch.sigmoid(y_target))
 
 
-def train(dataset_file, test_dataset_file, ckpt_file, ckpt_dir, num_epochs, batch_size, num_workers, weight_decay, learning_rate, loss_mode):
+def train(dataset_file, test_dataset_file, ckpt_file, ckpt_dir, num_epochs, batch_size, num_workers, weight_decay, learning_rate, loss_mode, scheduler_patience):
   print(":: Loading dataset")
   train_dataset = MyBatchDataset(dataset_file, batch_size)
   if test_dataset_file:
@@ -156,7 +159,7 @@ def train(dataset_file, test_dataset_file, ckpt_file, ckpt_dir, num_epochs, batc
   print(model)
 
   optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
-  scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor=0.5, patience=2)
+  scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, factor=0.5, patience=scheduler_patience)
   init_epoch = 0
 
   if ckpt_file is not None:
@@ -169,12 +172,13 @@ def train(dataset_file, test_dataset_file, ckpt_file, ckpt_dir, num_epochs, batc
 
   print(f":: Start training")
   for epoch in range(init_epoch, num_epochs):
-    print(f":: Epoch = {epoch}, LR = {optimizer.state_dict()['param_groups'][0]['lr']}")
+    lr = optimizer.state_dict()['param_groups'][0]['lr']
+    print(f":: Epoch = {epoch}, LR = {lr}")
     print(f":: Training loop")
     metric = MyMetric()
     model.train()
     with tqdm(train_loader) as progressbar:
-      for batch_sample in progressbar:
+      for i, batch_sample in enumerate(progressbar):
         optimizer.zero_grad()
         x_w, x_b, y_target = [t.to(DEVICE) for t in batch_sample]
         y_target = normalize_score(y_target)
@@ -183,8 +187,12 @@ def train(dataset_file, test_dataset_file, ckpt_file, ckpt_dir, num_epochs, batc
         loss.backward()
         optimizer.step()
         loss_L1 = F.l1_loss(y_model, y_target)
-        metric.update(y_model.detach(), y_target.detach(), loss.detach() * y_model.numel())
+        metric.update(y_model.detach().cpu(), y_target.detach().cpu(), loss.detach().cpu() * y_model.numel())
         progressbar.set_postfix(loss_L1=float(loss_L1), loss=float(loss))
+        del x_w, x_b, y_target, y_model
+        if i % 1000 == 0 and DEVICE.type == 'cuda' and DEBUG_CUDA_MEMORY:
+          print(f"i = {i}")
+          print(torch.cuda.memory_summary())
     mean, std, l1, accuracy, metric_loss = metric.compute()
     print(f"mean = {mean}, std = {std}, L1 = {l1}, accuracy = {accuracy}, loss = {metric_loss}")
     train_loss = metric_loss
@@ -201,8 +209,8 @@ def train(dataset_file, test_dataset_file, ckpt_file, ckpt_dir, num_epochs, batc
         y_target = normalize_score(y_target)
         y_model = model(x_w, x_b)
         loss = my_loss_func(y_model, y_target, loss_mode)
-        test_loss += loss
-        metric.update(y_model.detach(), y_target.detach(), loss.detach() * y_model.numel())
+        metric.update(y_model.detach().cpu(), y_target.detach().cpu(), loss.detach().cpu() * y_model.numel())
+        del x_w, x_b, y_target, y_model
       mean, std, l1, accuracy, metric_loss = metric.compute()
       print(f"mean = {mean}, std = {std}, L1 = {l1}, accuracy = {accuracy}, loss = {metric_loss}")
       test_loss = metric_loss
@@ -217,7 +225,7 @@ def train(dataset_file, test_dataset_file, ckpt_file, ckpt_dir, num_epochs, batc
         "epoch": epoch,
       }
       timestamp = datetime.strftime(datetime.now(), "%F-%H-%M-%S")
-      ckpt_file = f"{ckpt_dir}/ckpt-{timestamp}-epoch-{epoch}-accuracy-{float(train_accuracy):.3}-{float(test_accuracy):.3}-loss-{float(train_loss):.3}-{float(test_loss):.3}.pt"
+      ckpt_file = f"{ckpt_dir}/ckpt-{timestamp}-epoch-{epoch}-acc-{float(train_accuracy):.3}-{float(test_accuracy):.3}-loss-{float(train_loss):.3}-{float(test_loss):.3}-lr-{float(lr)}.pt"
       print(f":: Saving checkpoint ({ckpt_file})")
       torch.save(ckpt, ckpt_file)
 
@@ -340,8 +348,9 @@ def main_cli():
   parser.add_argument("--num-epochs", type=int, default=1024)
   parser.add_argument("--batch-size", type=int, default=1024)
   parser.add_argument("--num-workers", type=int, default=0)
-  parser.add_argument("--weight-decay", type=float, default=0.001)
+  parser.add_argument("--weight-decay", type=float, default=0)
   parser.add_argument("--learning-rate", type=float, default=0.001)
+  parser.add_argument("--scheduler-patience", type=float, default=0)
   parser.add_argument("--loss-mode", type=str, default="bce")
   parser.add_argument("--command", type=str, choices=COMMANDS, default="train")
   sys.exit(main(**parser.parse_args().__dict__))
