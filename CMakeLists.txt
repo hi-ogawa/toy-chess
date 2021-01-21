@@ -41,7 +41,7 @@ configure_file(src/config.hpp.in ${CMAKE_CURRENT_BINARY_DIR}/config.hpp @ONLY)
 #
 set(NN_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src/nn)
 set(WEIGHT_FILE ${NN_DIR}/data/default.bin)
-set(WEIGHT_FILE_URL https://github.com/hi-ogawa/toy-chess/releases/download/data/default.bin)
+set(WEIGHT_FILE_URL https://github.com/hi-ogawa/toy-chess/releases/download/data/ckpt-2021-01-21-06-25-25.bin)
 if(NOT EXISTS ${WEIGHT_FILE})
   message("Downloading a weight file from ${WEIGHT_FILE_URL}")
   file(DOWNLOAD ${WEIGHT_FILE_URL} ${WEIGHT_FILE} SHOW_PROGRESS)

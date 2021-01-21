@@ -1,4 +1,4 @@
-Setup
+Basic Workflow
 
 ```
 # Generate dataset
@@ -52,7 +52,7 @@ drive.mount('/content/gdrive', force_remount=True)
 %%shell
 ./build/Release/nn_preprocess --infile $DATA_DIR/gensfen.binpack --outfile $LOCAL_DATA_DIR/gensfen.halfkp
 
-# Check files are ready
+# Check if files are ready
 %%shell
 ls src/nn/training/main.py
 ls $LOCAL_DATA_DIR/gensfen.halfkp
