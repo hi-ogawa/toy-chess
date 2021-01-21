@@ -7,3 +7,4 @@ gensfen-*.halfkp.gz
 ckpt-*.pt
 ckpt-*.bin
 default.bin
+*.tsv

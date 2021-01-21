@@ -304,6 +304,33 @@ def process_model_parameters(infile, outfile):
   assert os.stat(outfile).st_size == expected
 
 
+# Export data for embedding projection visualization
+def export_embedding(infile, data_tsv, meta_tsv, regex, **kwargs):
+  assert data_tsv and meta_tsv
+
+  print(f":: Loading checkpoint ({infile})")
+  parameters = torch.load(infile, map_location=DEVICE)["model_state_dict"]
+  data = parameters['embedding.weight'][:WIDTH1].numpy() # shape = (WIDTH1, WIDTH2)
+
+  # Generate labels <king square>_<piece type>_<piece square> (e.g. e1_wQ_d1)
+  piece_types = ['wP', 'wN', 'wB', 'wR', 'wQ', 'bP', 'bN', 'bB', 'bR', 'bQ']
+  squares = [(chr(ord('a') + j) + str(i + 1)) for j in range(8) for i in range(8)]
+  labels = []
+  for k_sq in squares:
+      for sq in squares:
+          for pt in piece_types:
+              labels.append(f"{k_sq}_{pt}_{sq}")
+
+  print(f":: Writing data ({data_tsv})")
+  import re
+  f1 = open(data_tsv, 'w')
+  f2 = open(meta_tsv, 'w')
+  for label, row in zip(labels, data):
+    if not re.match(regex, label): continue
+    print(*row, sep="\t", file=f1)
+    print(label, file=f2)
+
+
 #
 # Main
 #
@@ -312,7 +339,8 @@ COMMANDS = [
   "train",
   "plot_statistics",
   "plot_model_parameters",
-  "process_model_parameters"
+  "process_model_parameters",
+  "export_embedding"
 ]
 
 def main(command, dataset, test_dataset, checkpoint, checkpoint_dir, weight_file, **kwargs):
@@ -327,6 +355,9 @@ def main(command, dataset, test_dataset, checkpoint, checkpoint_dir, weight_file
   if command == "plot_statistics":
     assert dataset
     plot_statistics(infile=dataset, **kwargs)
+
+  if command == "export_embedding":
+    export_embedding(infile=checkpoint, **kwargs)
 
   if command == "train":
     train(
@@ -352,6 +383,10 @@ def main_cli():
   parser.add_argument("--learning-rate", type=float, default=0.001)
   parser.add_argument("--scheduler-patience", type=float, default=0)
   parser.add_argument("--loss-mode", type=str, default="bce")
+  # export_embedding
+  parser.add_argument("--data-tsv", type=str)
+  parser.add_argument("--meta-tsv", type=str)
+  parser.add_argument("--regex", type=str, default='.')
   parser.add_argument("--command", type=str, choices=COMMANDS, default="train")
   sys.exit(main(**parser.parse_args().__dict__))
 

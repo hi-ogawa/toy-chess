@@ -85,6 +85,35 @@ Jupyter notebook for visualization
 jupyter notebook src/nn/training/main.ipynb
 ```
 
+Visualize HalfKP layer using Embedding Projector
+
+- URL: http://projector.tensorflow.org/?config=https://hi-ogawa.github.io/hosting/toy-chess/projector-config.json
+- Note that the data is hosted at https://github.com/hi-ogawa/hosting/tree/master/toy-chess.
+  Here we only generate the data.
+
+```
+# "regex" filters which row to export by matching to "<king square>_<piece type>_<piece square>"
+
+# For example, ".1" will match only king at backrank
+python src/nn/training/main.py \
+  --checkpoint=src/nn/data/ckpt.pt \
+  --data-tsv=src/nn/data/embedding-data--backrank.tsv \
+  --meta-tsv=src/nn/data/embedding-meta--backrank.tsv \
+  --regex='.1' \
+  --command=export_embedding
+
+# Take only king at initial position "e1"
+python src/nn/training/main.py \
+  --checkpoint=src/nn/data/ckpt.pt \
+  --data-tsv=src/nn/data/embedding-data--e1.tsv \
+  --meta-tsv=src/nn/data/embedding-meta--e1.tsv \
+  --regex='e1' \
+  --command=export_embedding
+```
+
+![HalfKP Embedding](https://hi-ogawa.github.io/hosting/toy-chess/halfkp-embedding.gif)
+
+
 References
 
 - https://github.com/nodchip/Stockfish
