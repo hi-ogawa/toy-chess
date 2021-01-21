@@ -24,17 +24,21 @@ jobs:
           submodules: true
       - uses: actions/setup-python@v2
       - name: Install tools
-        run: sudo apt-get update && sudo apt-get install cmake clang tar qt5-default
-      - name: Download cutechess-cli
-        run: wget https://github.com/cutechess/cutechess/releases/download/1.2.0/cutechess-cli-1.2.0-linux64.tar.gz && tar -xz -f cutechess-cli-1.2.0-linux64.tar.gz
+        run: sudo apt-get update && sudo apt-get install cmake clang tar qt5-default libqt5svg5-dev
+      - name: Install cutechess-cli
+        run: >
+          wget https://github.com/cutechess/cutechess/releases/download/1.2.0/cutechess_20200809+1.2.0+1.2.0-1_amd64.deb &&
+          sudo dpkg -i cutechess_20200809+1.2.0+1.2.0-1_amd64.deb
       - name: Download opening book
-        run: wget -P misc/match/data https://github.com/official-stockfish/books/raw/master/8moves_v3.pgn.zip && unzip -d misc/match/data misc/match/data/8moves_v3.pgn.zip
+        run: >
+          wget -P misc/match/data https://github.com/official-stockfish/books/raw/master/8moves_v3.pgn.zip &&
+          unzip -d misc/match/data misc/match/data/8moves_v3.pgn.zip
       - name: Build toy-chess
         run: python script.py init --clang && python script.py build --t main
       - name: Build stockfish
         run: make -C thirdparty/Stockfish/src -j build
       - name: === Match ===
-        run: CLI=cutechess-cli/cutechess-cli.sh CONCURRENCY=${{ github.event.inputs.concurrency }} ROUNDS=${{ github.event.inputs.rounds }} SF_ELO=${{ github.event.inputs.sf_elo }} bash misc/match/run.sh
+        run: CONCURRENCY=${{ github.event.inputs.concurrency }} ROUNDS=${{ github.event.inputs.rounds }} SF_ELO=${{ github.event.inputs.sf_elo }} bash misc/match/run.sh
       - uses: actions/upload-artifact@v2
         with:
           name: artifact
