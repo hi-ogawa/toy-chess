@@ -3,7 +3,7 @@ on: [push]
 jobs:
   unit:
     name: Unit test
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     strategy:
       fail-fast: false
       matrix:
@@ -14,21 +14,21 @@ jobs:
           submodules: true
       - uses: actions/setup-python@v2
       - name: Install tools
-        run: sudo apt-get install cmake clang
+        run: sudo apt-get update && sudo apt-get install cmake clang
       - name: Build
         run: python script.py init --clang --b ${{ matrix.build_type }} && python script.py build --b ${{ matrix.build_type }} --t main_test
       - name: === Unit test ===
         run: python script.py run --no-build --e main_test -- -s
   benchmark:
     name: Benchmark
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v2
         with:
           submodules: true
       - uses: actions/setup-python@v2
       - name: Install tools
-        run: sudo apt-get install cmake clang
+        run: sudo apt-get update && sudo apt-get install cmake clang
       - name: Build
         run: python script.py init --clang && python script.py build --t main_bench
       - name: === Benchmark ===

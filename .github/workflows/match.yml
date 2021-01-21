@@ -17,14 +17,14 @@ on:
 jobs:
   match:
     name: Match
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v2
         with:
           submodules: true
       - uses: actions/setup-python@v2
       - name: Install tools
-        run: sudo apt-get install cmake clang tar qt5-default
+        run: sudo apt-get update && sudo apt-get install cmake clang tar qt5-default
       - name: Download cutechess-cli
         run: wget https://github.com/cutechess/cutechess/releases/download/1.2.0/cutechess-cli-1.2.0-linux64.tar.gz && tar -xz -f cutechess-cli-1.2.0-linux64.tar.gz
       - name: Download opening book

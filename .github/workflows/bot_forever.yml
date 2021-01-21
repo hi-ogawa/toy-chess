@@ -3,7 +3,7 @@ on: [workflow_dispatch]
 jobs:
   bot:
     name: Bot
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     container:
       image: hiogawa/toy-chess:avx
       env:
