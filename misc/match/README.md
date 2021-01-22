@@ -2,8 +2,8 @@ Match
 
 ```
 # Download opening book
-wget -P misc/match/data https://github.com/official-stockfish/books/raw/master/8moves_v3.pgn.zip
-unzip -d misc/match/data misc/match/data/8moves_v3.pgn.zip
+wget -P misc/match/data https://github.com/official-stockfish/books/raw/master/noob_3moves.epd.zip
+unzip -d misc/match/data misc/match/data/noob_3moves.epd.zip
 
 # Build stockfish
 make -C thirdparty/Stockfish/src -j build

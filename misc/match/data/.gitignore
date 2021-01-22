@@ -1,3 +1,7 @@
 *.pgn
 *.pgn.zip
-log-*.txt
+*.epd
+*.epd.zip
+result-*.png
+debug-*.txt
+stderr-*.txt
