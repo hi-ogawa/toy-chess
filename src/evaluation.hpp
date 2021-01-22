@@ -7,7 +7,7 @@ const Score kScoreInf = 32001;
 const Score kScoreMate = 32000;
 const Score kScoreWin = 10000;
 const Score kScoreDraw = 0;
-const Score kNoneScore = 32002;
+const Score kScoreNone = -(kScoreInf + 1);
 
 //
 // NOTE: Below are not used since evaluation is succeeded by nn::Evaluator
@@ -18,13 +18,14 @@ const Score kNoneScore = 32002;
 // B > N > 3P
 // B + N = R + 1.5P
 // Q + P = 2R
-const inline array<Score, 6> kPieceValue = {{
+const inline array<Score, 7> kPieceValue = {{
   100, // Pawn
   320, // Knight
   330, // Bishop
   500, // Rook
   900, // Queen
   20000, // King
+  0, // kNoPieceType
 }};
 
 // NOTE: Rank index is flipped since this is copy-and-pasted from the page

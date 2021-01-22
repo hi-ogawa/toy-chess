@@ -17,11 +17,11 @@ TEST_CASE("Engine::go") {
   if (kBuildType == "Release") {
     fen = kFenMateIn3;
     depth = 6;
-    expected = "{g4g6, c6b7, h5h7, b7a8, g6g8, NONE}";
+    expected = "{g4g6, c6b7, h5h7, b7a8, g6g8}";
   } else {
     fen = kFenMateIn2;
     depth = 4;
-    expected = "{h5h7, d7c8, g6g8, NONE}";
+    expected = "{h5h7, d7c8, g6g8}";
   }
 
   engine.position.initialize(fen);

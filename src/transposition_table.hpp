@@ -22,42 +22,51 @@ namespace Zobrist {
   }
 }
 
-enum NodeType : uint8_t { kPVNode, kCutNode, kAllNode };
+enum NodeType : uint8_t { kPVNode, kCutNode, kAllNode, kNoneNode };
 
 struct TranspositionTable {
 
-  struct alignas(16) Entry {
-    Zobrist::Key key; // 8 (TODO: Use only upper half bits)
+  struct alignas(32) Entry {
+    uint16_t upper_key = 0; // 2
     Move move = kNoneMove; // 2
-    Score score = kNoneScore; // 2
-    Score evaluation = kNoneScore; // 2
-    NodeType node_type; // 1
+    Score score = kScoreNone; // 2
+    Score evaluation = kScoreNone; // 2
+    NodeType node_type = kNoneNode; // 1
     uint8_t depth = 0; // 1
-    bool hit = 0;
   };
   static_assert(sizeof(Entry) == 32);
 
-  size_t size = 0;
+  uint64_t size = 0;
+  uint64_t size_mask = 0;
   vector<Entry> data;
-
-  void resize(size_t new_size) {
-    size = new_size;
-    data.assign(size, {});
-  }
-
-  void resizeMB(size_t mb) {
-    resize((mb * (1 << 20)) / sizeof(Entry));
-  }
 
   void reset() {
     data.assign(size, {});
   }
 
-  Entry& probe(Zobrist::Key key) {
-    auto index = key % size;
-    auto& value = data[index];
-    value.hit = value.hit && (value.key == key);
-    return value;
+  void resize(uint64_t new_size) {
+    ASSERT(new_size > 0);
+    size = new_size;
+    size_mask = (1ULL << (63 - __builtin_clzll(size))) - 1;
+    reset();
+  }
+
+  void resizeMB(uint64_t mb) {
+    resize((mb * (1 << 20)) / sizeof(Entry));
+  }
+
+  uint16_t toUpperKey(uint64_t key) { return key >> 48; }
+
+  bool get(uint64_t key, Entry& entry) {
+    uint64_t index = key & size_mask;
+    entry = data[index];
+    return entry.upper_key == toUpperKey(key);
+  }
+
+  void put(uint64_t key, const Entry& entry) {
+    uint64_t index = key & size_mask;
+    data[index] = entry;
+    data[index].upper_key = toUpperKey(key);
   }
 };
 

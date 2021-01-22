@@ -3,7 +3,7 @@
 
 using namespace precomputation;
 
-void Position::recompute(int level) {
+void Position::recompute(int level, [[maybe_unused]] bool temporary) {
   // init
   if (level >= 2) {
     fillArray(piece_on, kNoPieceType);
@@ -264,32 +264,32 @@ array<Board, 2> Position::getPawnCapture(Color own) const {
 // Make/unmake move
 //
 
-void Position::putPiece(Color color, PieceType type, Square sq) {
+void Position::putPiece(Color color, PieceType type, Square sq, bool temporary) {
   assert(piece_on[color][sq] == kNoPieceType);
   pieces[color][type] ^= toBB(sq);
   occupancy[color] ^= toBB(sq);
   piece_on[color][sq] = type;
   state->key ^= Zobrist::piece_squares[color][type][sq];
-  if (evaluator) { evaluator->putPiece(color, type, sq); }
+  if (!temporary && evaluator) { evaluator->putPiece(color, type, sq); }
 }
 
-void Position::removePiece(Color color, Square sq) {
+void Position::removePiece(Color color, Square sq, bool temporary) {
   auto type = piece_on[color][sq];
   assert(type != kNoPieceType);
   pieces[color][type] ^= toBB(sq);
   occupancy[color] ^= toBB(sq);
   piece_on[color][sq] = kNoPieceType;
   state->key ^= Zobrist::piece_squares[color][type][sq];
-  if (evaluator) { evaluator->removePiece(color, type, sq); }
+  if (!temporary && evaluator) { evaluator->removePiece(color, type, sq); }
 }
 
-void Position::movePiece(Color color, Square from, Square to) {
+void Position::movePiece(Color color, Square from, Square to, bool temporary) {
   auto type = piece_on[color][from];
-  removePiece(color, from);
-  putPiece(color, type, to);
+  removePiece(color, from, temporary);
+  putPiece(color, type, to, temporary);
 }
 
-void Position::makeMove(const Move& move) {
+void Position::makeMove(const Move& move, bool temporary) {
   // Copy irreversible state
   pushState();
 
@@ -304,31 +304,31 @@ void Position::makeMove(const Move& move) {
 
   if (to_type != kNoPieceType) { // Capture except en passant (thus, this includes promotion)
     assert(to_type != kKing);
-    removePiece(opp, move.to());
+    removePiece(opp, move.to(), temporary);
   }
 
   if (move.type() == kNormal) {
-    movePiece(own, move.from(), move.to());
+    movePiece(own, move.from(), move.to(), temporary);
   }
 
   if (move.type() == kCastling) {
     auto [king_from, king_to, rook_from, rook_to] = kCastlingMoves[own][move.castlingSide()];
     assert(piece_on[own][king_from] == kKing      && piece_on[own][rook_from] == kRook);
     assert(piece_on[own][king_to] == kNoPieceType && piece_on[own][rook_to] == kNoPieceType);
-    movePiece(own, king_from, king_to);
-    movePiece(own, rook_from, rook_to);
+    movePiece(own, king_from, king_to, temporary);
+    movePiece(own, rook_from, rook_to, temporary);
   }
 
   if (move.type() == kPromotion) {
-    removePiece(own, move.from());
-    putPiece(own, move.promotionType(), move.to());
+    removePiece(own, move.from(), temporary);
+    putPiece(own, move.promotionType(), move.to(), temporary);
   }
 
   if (move.type() == kEnpassant) {
     auto sq = move.capturedPawnSquare();
     assert(piece_on[opp][sq] == kPawn);
-    movePiece(own, move.from(), move.to());
-    removePiece(opp, sq);
+    movePiece(own, move.from(), move.to(), temporary);
+    removePiece(opp, sq, temporary);
   }
 
   //
@@ -384,15 +384,15 @@ void Position::makeMove(const Move& move) {
   state->key ^= Zobrist::side_to_move;
 
   // Recompute states
-  recompute(1);
+  recompute(1, temporary);
 
   // Reset evaluator on king move
-  if (from_type == kKing && evaluator) {
+  if (!temporary && from_type == kKing && evaluator) {
     evaluator->initialize(*this);
   }
 }
 
-void Position::unmakeMove(const Move& move) {
+void Position::unmakeMove(const Move& move, bool temporary) {
   // Reversible states
   side_to_move = !side_to_move;
   game_ply--;
@@ -408,40 +408,68 @@ void Position::unmakeMove(const Move& move) {
 
   if (to_type != kNoPieceType) {
     assert(to_type != kKing);
-    putPiece(opp, to_type, move.to());
+    putPiece(opp, to_type, move.to(), temporary);
   }
 
   if (move.type() == kNormal) {
-    movePiece(own, move.to(), move.from());
+    movePiece(own, move.to(), move.from(), temporary);
   }
 
   if (move.type() == kCastling) {
     auto [king_from, king_to, rook_from, rook_to] = kCastlingMoves[own][move.castlingSide()];
-    movePiece(own, king_to, king_from);
-    movePiece(own, rook_to, rook_from);
+    movePiece(own, king_to, king_from, temporary);
+    movePiece(own, rook_to, rook_from, temporary);
   }
 
   if (move.type() == kPromotion) {
-    removePiece(own, move.to());
-    putPiece(own, kPawn, move.from());
+    removePiece(own, move.to(), temporary);
+    putPiece(own, kPawn, move.from(), temporary);
   }
 
   if (move.type() == kEnpassant) {
     auto sq = move.capturedPawnSquare();
-    putPiece(opp, kPawn, sq);
-    movePiece(own, move.to(), move.from());
+    putPiece(opp, kPawn, sq, temporary);
+    movePiece(own, move.to(), move.from(), temporary);
   }
 
   // Restore irreversible state (castling rights, en passant square, rule50)
   popState();
 
   // Recompute states
-  recompute(0);
+  recompute(0, temporary);
 
   // Reset evaluator on king move
-  if (from_type == kKing && evaluator) {
+  if (!temporary && from_type == kKing && evaluator) {
     evaluator->initialize(*this);
   }
+}
+
+void Position::makeNullMove() {
+  ASSERT(!state->checkers);
+  pushState();
+
+  // Enpassant
+  state->ep_square = 0;
+
+  // Reversible states
+  side_to_move = !side_to_move;
+  game_ply++;
+  state->key ^= Zobrist::side_to_move;
+
+  // Recompute states
+  recompute(1);
+}
+
+void Position::unmakeNullMove() {
+  // Reversible states
+  side_to_move = !side_to_move;
+  game_ply--;
+  state->key ^= Zobrist::side_to_move;
+
+  popState();
+
+  // Recompute states
+  recompute(1);
 }
 
 
@@ -449,7 +477,7 @@ void Position::unmakeMove(const Move& move) {
 // Move generation
 //
 
-void Position::generateMoves(MoveList& move_list, MoveGenerationType movegen_type) {
+void Position::generateMoves(MoveList& move_list, MoveGenerationType movegen_type) const {
   Color own = side_to_move;
   Board occ = occupancy[kBoth];
   Board opp_occ = occupancy[!own];
@@ -489,10 +517,10 @@ void Position::generateMoves(MoveList& move_list, MoveGenerationType movegen_typ
     for (auto from : toSQ(b_from)) {
       Board b_to = func_generate_to(from);
       if (movegen_type & kGenerateCapture) {
-        for (auto to : toSQ(b_to & c_target)) { move_list.put({Move(from, to), kCaptureScore}); }
+        for (auto to : toSQ(b_to & c_target)) { move_list.put(Move(from, to)); }
       }
       if (movegen_type & kGenerateQuiet) {
-        for (auto to : toSQ(b_to & q_target)) { move_list.put({Move(from, to), kQuietScore}); }
+        for (auto to : toSQ(b_to & q_target)) { move_list.put(Move(from, to)); }
       }
     }
   };
@@ -514,39 +542,39 @@ void Position::generateMoves(MoveList& move_list, MoveGenerationType movegen_typ
       if (!state->castling_rights[own][side]) { continue; }
       auto [king_from, king_to, rook_from, rook_to] = kCastlingMoves[own][side];
       if (in_between_table[king_from][rook_from] & occ) { continue; }
-      move_list.put({Move(king_from, king_to, kCastling), kCastlingScore});
+      move_list.put(Move(king_from, king_to, kCastling));
     }
   }
 }
 
-void Position::generatePawnPushMoves(MoveList& move_list, Color own, Board target, MoveGenerationType movegen_type) {
+void Position::generatePawnPushMoves(MoveList& move_list, Color own, Board target, MoveGenerationType movegen_type) const {
   auto [push1, push2] = getPawnPush(own);
   push1 &= target;
   for (auto to : toSQ(push1 & kBackrankBB[!own])) { // Promotion
     auto from = to - kPawnPushDirs[own];
     if (movegen_type & kGenerateCapture) {
-      move_list.put({Move(from, to, kPromotion, kQueen), kPromotionQScore});
-      move_list.put({Move(from, to, kPromotion, kKnight), kPromotionNScore});
+      move_list.put(Move(from, to, kPromotion, kQueen));
+      move_list.put(Move(from, to, kPromotion, kKnight));
     }
     if (movegen_type & kGenerateQuiet) {
-      move_list.put({Move(from, to, kPromotion, kBishop), kPromotionBRScore});
-      move_list.put({Move(from, to, kPromotion, kRook), kPromotionBRScore});
+      move_list.put(Move(from, to, kPromotion, kBishop));
+      move_list.put(Move(from, to, kPromotion, kRook));
     }
   }
   if (movegen_type & kGenerateQuiet) {
     for (auto to : toSQ(push1 & ~kBackrankBB[!own])) { // Non-promotion
       auto from = to - kPawnPushDirs[own];
-      move_list.put({Move(from, to), kQuietScore});
+      move_list.put(Move(from, to));
     }
     push2 &= target;
     for (auto to : toSQ(push2)) { // Double push
       auto from = to - 2 * kPawnPushDirs[own];
-      move_list.put({Move(from, to), kQuietScore});
+      move_list.put(Move(from, to));
     }
   }
 }
 
-void Position::generatePawnCaptureMoves(MoveList& move_list, Color own, Board target, MoveGenerationType movegen_type) {
+void Position::generatePawnCaptureMoves(MoveList& move_list, Color own, Board target, MoveGenerationType movegen_type) const {
   auto right_and_left = getPawnCapture(own);
   for (int i = 0; i < 2; i++) {
     Board b_cap = right_and_left[i];
@@ -555,25 +583,25 @@ void Position::generatePawnCaptureMoves(MoveList& move_list, Color own, Board ta
     for (auto to : toSQ(target & b_cap & occupancy[!own] &  kBackrankBB[!own])) {
       Square from = to - dir;
       if (movegen_type & kGenerateCapture) {
-        move_list.put({Move(from, to, kPromotion, kQueen), kPromotionQScore});
-        move_list.put({Move(from, to, kPromotion, kKnight), kPromotionNScore});
+        move_list.put(Move(from, to, kPromotion, kQueen));
+        move_list.put(Move(from, to, kPromotion, kKnight));
       }
       if (movegen_type & kGenerateQuiet) {
-        move_list.put({Move(from, to, kPromotion, kBishop), kPromotionBRScore});
-        move_list.put({Move(from, to, kPromotion, kRook), kPromotionBRScore});
+        move_list.put(Move(from, to, kPromotion, kBishop));
+        move_list.put(Move(from, to, kPromotion, kRook));
       }
     }
     if (movegen_type & kGenerateCapture) {
       // Non promotion
       for (auto to : toSQ(target & b_cap & occupancy[!own] & ~kBackrankBB[!own])) {
         Square from = to - dir;
-        move_list.put({Move(from, to), kCaptureScore});
+        move_list.put(Move(from, to));
       }
       // En passant
       if (b_cap & state->ep_square) {
         auto to = toSQ(state->ep_square).front();
         Square from = to - dir;
-        move_list.put({Move(from, to, kEnpassant), kCaptureScore});
+        move_list.put(Move(from, to, kEnpassant));
       }
     }
   }
@@ -710,20 +738,23 @@ bool Position::isLegal(const Move& move) const {
   return 1;
 }
 
-Score Position::evaluateCapture(const Move& move) {
-  // TODO: Handle promotion exchange properly
+Score Position::evaluateMove(const Move& move) {
+  if (move.type() == kCastling) { return 0; }
+
+  // TODO: Better promotion scoring
   if (move.type() == kPromotion) { return kPieceValue[move.promotionType()] - kPieceValue[kPawn]; }
 
-  PieceType attackee = kNoPieceType;
+  PieceType victim = 0;
   if (move.type() == kEnpassant) {
-    attackee = kPawn;
+    victim = kPawn;
   } else {
-    attackee = piece_on[!side_to_move][move.to()];
+    victim = piece_on[!side_to_move][move.to()];
   }
-  ASSERT(attackee != kNoPieceType);
-  makeMove(move);
-  Score score = kPieceValue[attackee] - computeSEE(move.to());
-  unmakeMove(move);
+  if (victim == kNoPieceType) { return 0; }
+
+  makeMove(move, /* temporary */ true);
+  Score score = kPieceValue[victim] - computeSEE(move.to());
+  unmakeMove(move, /* temporary */ true);
   return score;
 }
 
@@ -737,14 +768,15 @@ Score Position::computeSEE(Square to) {
   ASSERT(attacker != kNoPieceType);
   ASSERT(attackee != kNoPieceType);
   ASSERT(attackee != kKing);
-  makeMove(move);
+  makeMove(move, /* temporary */ true);
   Score score = std::max<Score>(0, kPieceValue[attackee] - computeSEE(to));
-  unmakeMove(move);
+  unmakeMove(move, /* temporary */ true);
   return score;
 }
 
 Move Position::getLVA(Color own, Square to) const {
   // TODO: Acount for promoted piece value
+  // TODO: Can we do without full legality check?
   bool is_backrank = SQ::toRank(to) == kBackrank[!side_to_move];
 
   auto find_pawn_move = [&]() -> Move {
@@ -785,8 +817,19 @@ Move Position::getLVA(Color own, Square to) const {
   return kNoneMove;
 }
 
-bool Position::isCapture(const Move& move) {
-  return move.type() == kEnpassant || piece_on[!side_to_move][move.to()] != kNoPieceType;
+bool Position::isCaptureOrPromotion(const Move& move) {
+  return
+    (move.type() == kEnpassant) ||
+    (move.type() == kPromotion) ||
+    (piece_on[!side_to_move][move.to()] != kNoPieceType);
+}
+
+bool Position::givesCheck(const Move& move) {
+  // TODO: Optimize without making move
+  makeMove(move, /* temporary */ true);
+  bool res = state->checkers;
+  unmakeMove(move, /* temporary */ true);
+  return res;
 }
 
 int64_t Position::perft(int depth, int debug) {
@@ -795,7 +838,7 @@ int64_t Position::perft(int depth, int debug) {
   int64_t res = 0;
   MoveList move_list;
   generateMoves(move_list);
-  for (auto [move, _score] : move_list) {
+  for (auto move : move_list) {
     if (!isLegal(move)) { continue; }
 
     if (depth == 1) { res++; continue; }
@@ -814,7 +857,7 @@ vector<pair<Move, int64_t>> Position::divide(int depth, int debug) {
 
   MoveList move_list;
   generateMoves(move_list);
-  for (auto [move, _score] : move_list) {
+  for (auto move : move_list) {
     if (!isLegal(move)) { continue; }
 
     makeMove(move);

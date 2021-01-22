@@ -1,4 +1,5 @@
 #include "engine.hpp"
+#include "move_picker.hpp"
 
 void TimeControl::initialize(const GoParameters& go, Color own, int ply) {
   start = now();
@@ -22,27 +23,24 @@ void TimeControl::initialize(const GoParameters& go, Color own, int ply) {
 
 void SearchResult::print(std::ostream& ostr) const {
   if (type == kSearchResultInfo) {
-    if (!misc.empty()) {
-      ostr << "info string " << misc;
+    if (!debug.empty()) {
+      ostr << "info string " << debug;
 
     } else {
-      int64_t nps = (1000 * num_nodes) / time;
+      int64_t nps = (1000 * stats_nodes) / stats_time;
       ostr << "info"
            << " depth " << depth
            << " score cp " << score
-           << " time " << time
-           << " nodes " << num_nodes
+           << " time " << stats_time
+           << " nodes " << stats_nodes
            << " nps " << nps
            << " pv";
-      for (auto move : pv) {
-        if (move.type() == kNoMoveType) { break; }
-        ostr << " " << move;
-      }
+      for (auto move : pv) { ostr << " " << move; }
     }
   }
 
   if (type == kSearchResultBestMove) {
-    ostr << "bestmove " << pv[0];
+    ostr << "bestmove " << pv.data[0];
   }
 }
 
@@ -82,14 +80,16 @@ void Engine::go(bool blocking) {
 
 void Engine::goImpl() {
   time_control.initialize(go_parameters, position.side_to_move, position.game_ply);
+  // TODO: When no increment, this might fail (essentiall we got flagged...)
   ASSERT(checkSearchLimit());
 
   // Debug info
   SearchResult info;
   info.type = kSearchResultInfo;
-  info.misc += "side = " + toString(position.side_to_move) + ", ";
-  info.misc += "eval = " + toString(evaluator.evaluate()) + ", ";
-  info.misc += "time = " + toString(time_control.getDuration());
+  info.debug += "ply = " + toString(position.game_ply) + ", ";
+  info.debug += "side = " + toString(position.side_to_move) + ", ";
+  info.debug += "eval = " + toString(position.evaluate()) + ", ";
+  info.debug += "time = " + toString(time_control.getDuration());
   search_result_callback(info);
 
   int depth_end = go_parameters.depth;
@@ -104,7 +104,12 @@ void Engine::goImpl() {
 
   // Iterative deepening
   for (int depth = 2; depth <= depth_end; depth++) {
-    auto res = search(depth);
+    SearchResult res;
+    if (depth < 4) {
+      res = search(depth);
+    } else {
+      res = searchWithAspirationWindow(depth, results[depth - 1].score);
+    }
     if (!checkSearchLimit()) { break; } // Ignore possibly incomplete result
 
     // Save result and send "info ..."
@@ -113,11 +118,65 @@ void Engine::goImpl() {
     results[depth].type = kSearchResultInfo;
     results.push_back(results[depth]);
     search_result_callback(results[depth]);
+
+    // Debug info
+    SearchResult res_info;
+    res_info.type = kSearchResultInfo;
+    res_info.debug += "tt_hit = " + toString(res.stats_tt_hit) + ", ";
+    res_info.debug += "tt_cut = " + toString(res.stats_tt_cut) + ", ";
+    res_info.debug += "null_prune = " + toString(res.stats_null_prune_success) + "/" + toString(res.stats_null_prune) + ", ";
+    res_info.debug += "futility_prune = " + toString(res.stats_futility_prune) + ", ";
+    res_info.debug += "lmr = " + toString(res.stats_lmr_success) + "/" + toString(res.stats_lmr);
+    search_result_callback(res_info);
   }
 
   // Send "bestmove ..."
   results[last_depth].type = kSearchResultBestMove;
   search_result_callback(results[last_depth]);
+}
+
+SearchResult Engine::searchWithAspirationWindow(int depth, Score init_target) {
+  const Score kInitDelta = 25;
+
+  // Prevent overflow
+  int32_t delta = kInitDelta;
+  int32_t target = init_target;
+  int32_t kInf = kScoreInf;
+  int32_t alpha, beta;
+
+  while (true) {
+    alpha = std::max(target - delta, -kInf);
+    beta = std::min(target + delta, kInf);
+
+    SearchResult res;
+    res.depth = depth;
+
+    state = &search_state_stack[0];
+    Score score = searchImpl(alpha, beta, 0, depth, res);
+    if (!checkSearchLimit()) { return {}; }
+
+    if (alpha < score && score < beta) {
+      res.score = score;
+      res.pv = state->pv;
+      res.stats_time = time_control.getTime() + 1;
+      return res;
+    }
+
+    // Extend low
+    //       <--t-->
+    // <-----t----->
+    if (score <= alpha) { target -= delta; }
+
+    // Extend high
+    // <--t-->
+    // <-----t----->
+    if (beta <= alpha) { target += delta; }
+
+    delta *= 2;
+  }
+
+  ASSERT(0);
+  return {};
 }
 
 SearchResult Engine::search(int depth) {
@@ -126,69 +185,174 @@ SearchResult Engine::search(int depth) {
 
   state = &search_state_stack[0];
   res.score = searchImpl(-kScoreInf, kScoreInf, 0, depth, res);
-  res.time = time_control.getTime() + 1;
-
-  res.pv.resize(depth);
-  for (int i = 0; i < depth; i++) {
-    res.pv[i] = state->pv[i];
-    if (res.pv[i].type() == kNoMoveType) { break; }
-  }
-
+  res.pv = state->pv;
+  res.stats_time = time_control.getTime() + 1;
   return res;
 }
 
-Score Engine::quiescenceSearch(Score alpha, Score beta, int depth, SearchResult& result) {
-  if (!checkSearchLimit()) { return position.evaluate(); }
-  result.num_nodes++;
+Score Engine::searchImpl(Score alpha, Score beta, int depth, int depth_end, SearchResult& result) {
+  if (!checkSearchLimit()) { return kScoreNone; }
+  if (depth >= depth_end) { return quiescenceSearch(alpha, beta, depth, result); }
 
-  auto& tt_entry = transposition_table.probe(position.state->key);
+  result.stats_nodes++;
+
+  TTEntry tt_entry;
+  bool tt_hit = transposition_table.get(position.state->key, tt_entry);
+  result.stats_tt_hit += tt_hit;
 
   Move best_move = kNoneMove;
   NodeType node_type = kAllNode;
-  Score score = kNoneScore;
-  Score evaluation = kNoneScore;
+  Score score = -kScoreInf;
+  Score evaluation = kScoreNone;
 
+  bool interrupted = 0;
+  int depth_to_go = depth_end - depth;
+  bool in_check = position.state->checkers;
+  Move tt_move = tt_hit ? tt_entry.move : kNoneMove;
+  MoveList searched_quiets, searched_captures;
+  int move_cnt = 0;
+
+  // Use lambda to skip from anywhere to the end
   ([&]() {
 
-    // NOTE: this blindly ignores key collision
-    if (tt_entry.hit) {
-      // Hash score beta cut
-      if (tt_entry.node_type != kAllNode) {
-        if (beta <= tt_entry.score && position.isPseudoLegal(tt_entry.move) && position.isLegal(tt_entry.move)) {
+    if (tt_hit) {
+      // Hash score cut
+      if (depth_to_go <= tt_entry.depth) {
+        if (beta <= tt_entry.score && (tt_entry.node_type == kCutNode || tt_entry.node_type == kPVNode)) {
           score = tt_entry.score;
           node_type = kCutNode;
-          best_move = tt_entry.move;
+          best_move = tt_move;
+          result.stats_tt_cut++;
+          return;
+        }
+        if (tt_entry.score <= alpha && tt_entry.node_type == kAllNode) {
+          score = tt_entry.score;
+          node_type = kAllNode;
+          result.stats_tt_cut++;
           return;
         }
       }
 
       // Hash evaluation
-      score = evaluation = tt_entry.evaluation;
+      evaluation = tt_entry.evaluation;
     }
 
     // Static evaluation
-    if (score == kNoneScore) { score = evaluation = position.evaluate(); }
+    if (evaluation == kScoreNone) { evaluation = position.evaluate(); }
+
+    MovePicker move_picker(position, history, tt_move, state->killers, in_check, /* quiescence */ false);
+    Move move;
+    while (move_picker.getNext(move)) {
+      move_cnt++;
+
+      bool is_capture = position.isCaptureOrPromotion(move);
+      (is_capture ? searched_captures : searched_quiets).put(move);
+
+      makeMove(move);
+      score = std::max<Score>(score, -searchImpl(-beta, -alpha, depth + 1, depth_end, result));
+      unmakeMove(move);
+      if (!checkSearchLimit()) { interrupted = 1; return; }
+
+      if (beta <= score) { // beta cut
+        node_type = kCutNode;
+        best_move = move;
+        return;
+      }
+      if (alpha < score) { // pv
+        node_type = kPVNode;
+        alpha = score;
+        best_move = move;
+        state->updatePV(move, (state + 1)->pv);
+      }
+    }
+
+    // Checkmate/stalemate
+    if (move_cnt == 0) { score = std::max<Score>(score, position.evaluateLeaf(depth)); }
+
+  })(); // Lambda End
+
+  if (interrupted) { return kScoreNone; }
+
+  ASSERT(-kScoreInf < score && score < kScoreInf);
+  tt_entry.node_type = node_type;
+  tt_entry.move = best_move;
+  tt_entry.score = score;
+  tt_entry.evaluation = evaluation;
+  tt_entry.depth = depth_to_go;
+  transposition_table.put(position.state->key, tt_entry);
+
+  if (node_type == kCutNode) {
+    updateKiller(best_move);
+    updateHistory(best_move, searched_quiets, searched_captures, depth_to_go);
+  }
+
+  return score;
+}
+
+Score Engine::quiescenceSearch(Score alpha, Score beta, int depth, SearchResult& result) {
+  if (!checkSearchLimit()) { return kScoreNone; }
+
+  result.stats_nodes++;
+  if (depth >= Position::kMaxDepth) { return position.evaluate(); }
+
+  TTEntry tt_entry;
+  bool tt_hit = transposition_table.get(position.state->key, tt_entry);
+  result.stats_tt_hit += tt_hit;
+
+  Move best_move = kNoneMove;
+  NodeType node_type = kAllNode;
+  Score score = -kScoreInf;
+  Score evaluation = kScoreNone;
+
+  bool interrupted = 0;
+  bool in_check = position.state->checkers;
+  Move tt_move = tt_hit ? tt_entry.move : kNoneMove;
+  int move_cnt = 0;
+
+  ([&]() {
+
+    if (tt_hit) {
+      // Hash score cut
+      if (tt_entry.node_type == kCutNode || tt_entry.node_type == kPVNode) {
+        if (beta <= tt_entry.score) {
+          score = tt_entry.score;
+          node_type = kCutNode;
+          best_move = tt_entry.move;
+          result.stats_tt_cut++;
+          return;
+        }
+      }
+      if (tt_entry.node_type == kAllNode) {
+        if (tt_entry.score <= alpha) {
+          score = tt_entry.score;
+          node_type = kAllNode;
+          result.stats_tt_cut++;
+          return;
+        }
+      }
+
+      // Hash evaluation
+      evaluation = tt_entry.evaluation;
+    }
+
+    // Static evaluation
+    if (evaluation == kScoreNone) { evaluation = position.evaluate(); }
 
     // Stand pat beta cut
-    if (beta <= score) {
-      node_type = kCutNode;
-      return;
-    }
-    if (alpha < score) {
-      node_type = kPVNode;
-      alpha = score;
-    }
+    score = evaluation;
+    if (beta <= score) { node_type = kCutNode; return; }
+    if (alpha < score) { alpha = score; }
 
-    // Recursively search capture/promotion moves
-    generateMoves(tt_entry, /* quiescence */ 1);
-    while (auto move = getNextMove()) {
-      if (!position.isLegal(move)) { continue; }
-
-      position.makeMove(move);
-      state++;
+    MovePicker move_picker(position, history, tt_move, state->killers, in_check, /* quiescence */ true);
+    Move move;
+    while (move_picker.getNext(move)) {
+      move_cnt++;
+      makeMove(move);
       score = std::max<Score>(score, -quiescenceSearch(-beta, -alpha, depth + 1, result));
-      state--;
-      position.unmakeMove(move);
+      unmakeMove(move);
+
+      if (!checkSearchLimit()) { interrupted = 1; return; }
+
       if (beta < score) {
         node_type = kCutNode;
         best_move = move;
@@ -200,169 +364,22 @@ Score Engine::quiescenceSearch(Score alpha, Score beta, int depth, SearchResult&
       }
     }
 
-    // TODO: Handle checkmate/stalemate within quiescence search.
-    //       Problem is that currently above move generation doesn't include evasions.
+    // Checkmate/stalemate
+    if (in_check && move_cnt == 0) { score = position.evaluateLeaf(depth); }
 
-  })();
+  })(); // Lambda End
+
+  if (interrupted) { return kScoreNone; }
 
   ASSERT(-kScoreInf < score && score < kScoreInf);
-  tt_entry.hit = 1;
-  tt_entry.key = position.state->key;
   tt_entry.node_type = node_type;
   tt_entry.move = best_move;
   tt_entry.score = score;
   tt_entry.evaluation = evaluation;
   tt_entry.depth = 0;
-  return score;
-}
-
-Score Engine::searchImpl(Score alpha, Score beta, int depth, int depth_end, SearchResult& result) {
-  if (!checkSearchLimit()) { return position.evaluate(); }
-
-  if (depth == depth_end) { return quiescenceSearch(alpha, beta, 0, result); }
-
-  result.num_nodes++;
-
-  // NOTE: possible hit entry can be overwritten during recursive call of "searchImpl"
-  auto& tt_entry = transposition_table.probe(position.state->key);
-
-  Move best_move = kNoneMove; // None move indicates checkmate/stalemate
-  NodeType node_type = kAllNode;
-  Score score = -kScoreInf;
-  int depth_to_go = depth_end - depth;
-
-  // Use lambda to skip from anywhere to the end
-  ([&]() {
-
-    // Hash score beta cut (NOTE: this blindly ignores key collision)
-    if (tt_entry.hit && depth_to_go <= tt_entry.depth && tt_entry.node_type != kAllNode) {
-      if (beta <= tt_entry.score && position.isPseudoLegal(tt_entry.move) && position.isLegal(tt_entry.move)) {
-        score = tt_entry.score;
-        node_type = kCutNode;
-        best_move = tt_entry.move;
-        updateKiller(tt_entry.move);
-        return;
-      }
-    }
-
-    int move_cnt = 0;
-    generateMoves(tt_entry);
-    while (auto move = getNextMove()) {
-      if (!position.isLegal(move)) { continue; }
-      move_cnt++;
-
-      position.makeMove(move);
-      state++;
-      score = std::max<Score>(score, -searchImpl(-beta, -alpha, depth + 1, depth_end, result));
-      state--;
-      position.unmakeMove(move);
-      if (beta <= score) { // beta cut
-        node_type = kCutNode;
-        best_move = move;
-        updateKiller(move);
-        return;
-      }
-      if (alpha < score) { // pv
-        node_type = kPVNode;
-        alpha = score;
-        best_move = move;
-        for (int d = depth + 1; d < depth_end; d++) {
-          state->pv[d] = (state + 1)->pv[d];
-        }
-      }
-    }
-
-    if (move_cnt == 0) {
-      // Leaf node (checkmate or stalemate)
-      score = std::max<Score>(score, position.evaluateLeaf(depth));
-      if (beta <= score) {
-        node_type = kCutNode;
-        return;
-      }
-      if (alpha < score) {
-        node_type = kPVNode;
-      }
-    }
-  })(); // lambda end
-
-  ASSERT(-kScoreInf < score && score < kScoreInf);
-  tt_entry.hit = 1;
-  tt_entry.key = position.state->key;
-  tt_entry.node_type = node_type;
-  tt_entry.move = best_move;
-  tt_entry.score = score;
-  tt_entry.depth = depth_to_go;
-
-  // Update pv
-  if (node_type == kPVNode) { state->pv[depth] = best_move; }
+  transposition_table.put(position.state->key, tt_entry);
 
   return score;
-}
-
-void Engine::generateMoves(const TTEntry& tt_entry, bool quiescence) {
-  state->move_list.clear();
-  state->move_generators.clear();
-
-  if (!quiescence) {
-    // Hash move
-    // TODO: There seems some tt related bug only in debug mode (which happens around checkmate/stalemate)
-    if (kBuildType == "Release" && tt_entry.hit && tt_entry.node_type != kAllNode) {
-      auto move = tt_entry.move;
-      if (position.isPseudoLegal(move)) {
-        state->move_generators.put([&](auto& ls) { ls.put({move, kHashScore}); });
-      }
-    }
-  }
-
-
-  // Capture/Promotion moves
-  // TODO: Don't repeat hash move
-  // TODO: Postpone bad captures after killer and quiet
-  // TODO: Score promotion properly
-  state->move_generators.put([&](auto& ls) {
-    MoveList ls_tmp;
-    position.generateMoves(ls_tmp, kGenerateCapture);
-    for (auto& [move, score] : ls_tmp) {
-      // TODO: Avoid duplicated legality check in "searchImpl" and "quiescenceSearch"
-      if (!position.isLegal(move)) { continue; }
-
-      // Assign SEE score
-      Score see_score = position.evaluateCapture(move);
-      if (quiescence && see_score <= 0) { continue; } // Skip bad SEE in quiescence
-
-      ls.put({move, see_score});
-    }
-
-    // Sort by SEE score
-    std::sort(ls.begin(), ls.end(), [](auto x, auto y) { return x.second > y.second; });
-  });
-
-  // Killer moves
-  if (!quiescence) {
-    state->move_generators.put([&](auto& ls) {
-      for (auto move : state->killers) {
-        if (!position.isCapture(move) && position.isPseudoLegal(move)) {
-          ls.put({move, kKillerScore});
-        }
-      }
-    });
-  }
-
-  // Quiet moves
-  if (!quiescence) {
-    state->move_generators.put([&](auto& ls) {
-      position.generateMoves(ls, kGenerateQuiet);
-      std::sort(ls.begin(), ls.end(), [](auto x, auto y) { return x.second < y.second; });
-    });
-  }
-}
-
-Move Engine::getNextMove() {
-  while (state->move_list.empty()) {
-    if (state->move_generators.empty()) { return kNoneMove; }
-    state->move_generators.get()(state->move_list);
-  }
-  return state->move_list.get().first;
 }
 
 void Engine::updateKiller(const Move& move) {
@@ -370,4 +387,54 @@ void Engine::updateKiller(const Move& move) {
   if (m0 == move) { return; }
   m1 = move;
   std::swap(m0, m1);
+}
+
+void Engine::updateHistory(const Move& best_move, const MoveList& quiets, const MoveList& captures, int depth) {
+  const Score kMaxHistoryScore = 2000;
+
+  auto update = [&](Score sign, Score& result) {
+    result += sign * (depth * depth);
+    result = std::min<Score>(result, +kMaxHistoryScore);
+    result = std::max<Score>(result, -kMaxHistoryScore);
+  };
+
+  if (position.isCaptureOrPromotion(best_move)) {
+    // Increase best capture
+    update(+1, history.getCaptureScore(position, best_move));
+
+  } else {
+    // Increase best quiet
+    update(+1, history.getQuietScore(position, best_move));
+
+    // Decrease all non-best quiets
+    for (auto move : quiets) {
+      if (move == best_move) { continue; }
+      update(-1, history.getQuietScore(position, move));
+    }
+  }
+
+  // Decrease all non-best captures
+  for (auto move : captures) {
+    if (move == best_move) { continue; }
+    update(-1, history.getCaptureScore(position, move));
+  }
+}
+
+void Engine::makeMove(const Move& move) {
+  if (move == kNoneMove) {
+    position.makeNullMove();
+  } else {
+    position.makeMove(move);
+  }
+  state++;
+  state->reset();
+}
+
+void Engine::unmakeMove(const Move& move) {
+  state--;
+  if (move == kNoneMove) {
+    position.unmakeNullMove();
+  } else {
+    position.unmakeMove(move);
+  }
 }

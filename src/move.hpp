@@ -28,8 +28,8 @@ struct Move {
   }
 
   operator bool() { return data != 0; }
-  bool operator==(const Move& other) { return data == other.data; }
-  bool operator!=(const Move& other) { return data != other.data; }
+  bool operator==(const Move& other) const { return data == other.data; }
+  bool operator!=(const Move& other) const { return data != other.data; }
 
   Square from() const { return Square(data & 0b111111U); }
 
@@ -64,24 +64,13 @@ struct Move {
 inline const Move kNoneMove;
 
 //
-// Move score for ordering
+// Move generation type
 //
-using MoveScore = int16_t;
-enum : int16_t {
-  kHashScore,
-  kPromotionQScore,
-  kCaptureScore,
-  kKillerScore,
-  kCastlingScore,
-  kQuietScore,
-  kPromotionNScore,
-  kPromotionBRScore
-};
 
 enum MoveGenerationType : uint8_t {
-  kGenerateCapture = 1 << 0,
+  kGenerateCapture = 1 << 0, // Includes Queen/Knight promotion
   kGenerateQuiet = 1 << 1,
   kGenerateAll = kGenerateCapture | kGenerateQuiet
 };
 
-using MoveList = SimpleQueue<std::pair<Move, MoveScore>, 256>;
+using MoveList = SimpleQueue<Move, 256>;

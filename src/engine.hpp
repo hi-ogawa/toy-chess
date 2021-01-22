@@ -8,10 +8,17 @@ struct SearchResult {
   SearchResultType type = kNoSearchResult;
   int depth = 0;
   Score score = 0;
-  int64_t time = 0;
-  int64_t num_nodes = 0;
-  vector<Move> pv;
-  string misc;
+  int64_t stats_time = 0;
+  int64_t stats_nodes = 0;
+  int64_t stats_tt_hit = 0;
+  int64_t stats_tt_cut = 0;
+  int64_t stats_futility_prune = 0;
+  int64_t stats_null_prune = 0;
+  int64_t stats_null_prune_success = 0;
+  int64_t stats_lmr = 0;
+  int64_t stats_lmr_success = 0;
+  MoveList pv;
+  string debug;
 
   void print(std::ostream& ostr = std::cerr) const;
   friend std::ostream& operator<<(std::ostream& ostr, const SearchResult& self) { self.print(ostr); return ostr; }
@@ -46,18 +53,51 @@ struct TimeControl {
 
 
 struct SearchState {
-  array<Move, Position::kMaxDepth> pv;
-  MoveList move_list;
-  SimpleQueue<std::function<void(MoveList&)>, 4> move_generators; // hash, capture, killer, quiet
+  MoveList pv;
   array<Move, 2> killers = {};
+
+  void updatePV(const Move& move, const MoveList& child_pv) {
+    pv.clear();
+    pv.put(move);
+    for (auto child : child_pv) { pv.put(child); }
+  }
+
+  void reset() {
+    pv.clear();
+    killers = {};
+  }
 };
 
+struct History {
+  // For quiet moves (color, from, to)
+  array3<Score, 2, 64, 64> quiet = {};
+
+  // For capture (color, attacker, to, attackee) (includes promotion/enpassant)
+  array4<Score, 2, 6, 64, 7> capture = {};
+
+  Score& getQuietScore(const Position& p, const Move& move) {
+    Color own = p.side_to_move;
+    return quiet[own][move.from()][move.to()];
+  }
+
+  Score& getCaptureScore(const Position& p, const Move& move) {
+    Color own = p.side_to_move;
+    PieceType attacker = p.piece_on[ own][move.from()];
+    PieceType attackee = p.piece_on[!own][move.to()];
+    return capture[own][attacker][move.to()][attackee];
+  }
+};
 
 struct Engine {
   Position position;
+
+  static inline const string kEmbeddedWeightName = "<embedded-weight>";
   nn::Evaluator evaluator;
-  TranspositionTable transposition_table;
+
+  History history;
+
   static inline const size_t kDefaultTableSizeMB = 64;
+  TranspositionTable transposition_table;
 
   GoParameters go_parameters = {};
   TimeControl time_control = {};
@@ -85,6 +125,7 @@ struct Engine {
   void reset() {
     position.initialize(kFenInitialPosition);
     transposition_table.reset();
+    history = {};
   }
 
   // "go" and "stop/wait" should be called from different threads
@@ -98,18 +139,18 @@ struct Engine {
 
   // Fixed depth alph-beta search (NOTE: Only usable from "go" method)
   SearchResult search(int);
+  SearchResult searchWithAspirationWindow(int, Score);
   Score searchImpl(Score, Score, int, int, SearchResult&);
   Score quiescenceSearch(Score, Score, int, SearchResult&);
 
-  void generateMoves(const TTEntry&, bool quiescence = 0);
-  Move getNextMove();
-
+  void makeMove(const Move& move);
+  void unmakeMove(const Move& move);
   void updateKiller(const Move&);
+  void updateHistory(const Move&, const MoveList&, const MoveList&, int);
 
   // Misc
-  void print(std::ostream&);
+  void print(std::ostream& ostr = std::cerr);
 
-  static inline const string kEmbeddedWeightName = "<embedded-weight>";
   void load(const string& filename) {
     if (filename == kEmbeddedWeightName) {
       evaluator.loadEmbeddedWeight();

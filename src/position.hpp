@@ -32,8 +32,8 @@ struct Position {
   };
 
   State* state = nullptr;
-  const static inline int kMaxDepth = 256;
-  array<State, kMaxDepth> state_stack;
+  const static inline int kMaxDepth = 255;
+  array<State, kMaxDepth + 1> state_stack;
 
   Position(const string& fen = kFenInitialPosition) {
     initialize(fen);
@@ -60,7 +60,7 @@ struct Position {
     state--;
   }
 
-  void recompute(int);
+  void recompute(int, bool temporary = false);
 
   //
   // I/O
@@ -85,18 +85,20 @@ struct Position {
   //
   // Make/Unmake move
   //
-  void putPiece(Color, PieceType, Square);
-  void removePiece(Color, Square);
-  void movePiece(Color, Square, Square);
-  void makeMove(const Move&);
-  void unmakeMove(const Move&);
+  void putPiece(Color, PieceType, Square, bool temporary = false);
+  void removePiece(Color, Square, bool temporary = false);
+  void movePiece(Color, Square, Square, bool temporary = false);
+  void makeMove(const Move&, bool temporary = false);
+  void unmakeMove(const Move&, bool tempoary = false);
+  void makeNullMove();
+  void unmakeNullMove();
 
   //
   // Move generation
   //
-  void generateMoves(MoveList&, MoveGenerationType movegen_type = kGenerateAll); // Generate pseudo legal moves
-  void generatePawnPushMoves(MoveList&, Color, Board, MoveGenerationType);
-  void generatePawnCaptureMoves(MoveList&, Color, Board, MoveGenerationType);
+  void generateMoves(MoveList&, MoveGenerationType movegen_type = kGenerateAll) const; // Generate pseudo legal moves
+  void generatePawnPushMoves(MoveList&, Color, Board, MoveGenerationType) const;
+  void generatePawnCaptureMoves(MoveList&, Color, Board, MoveGenerationType) const;
   bool isLegal(const Move& move) const; // Check legality of pseudo legal move
   bool isPseudoLegal(const Move& move) const; // Check pseudo legality of any move (used to validate tt move)
 
@@ -128,9 +130,10 @@ struct Position {
   //
   // Static exchange evaluation
   //
-  Score evaluateCapture(const Move&);
+  Score evaluateMove(const Move&);
   Score computeSEE(Square);
-  Move getLVA(Color, Square) const; // least valuable attacker
+  Move getLVA(Color, Square) const; // Least valuable attacker
 
-  bool isCapture(const Move&);
+  bool isCaptureOrPromotion(const Move&);
+  bool givesCheck(const Move&);
 };

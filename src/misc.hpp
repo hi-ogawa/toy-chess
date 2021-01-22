@@ -58,6 +58,9 @@ using array2 = array<array<T, N2>, N1>;
 template<class T, size_t N1, size_t N2, size_t N3>
 using array3 = array<array<array<T, N3>, N2>, N1>;
 
+template<class T, size_t N1, size_t N2, size_t N3, size_t N4>
+using array4 = array<array<array<array<T, N4>, N3>, N2>, N1>;
+
 template<class A, class T>
 void fillArray(A& a, T v) { std::fill_n(reinterpret_cast<T*>(&a[0]), sizeof(A) / sizeof(T), v); }
 
@@ -96,16 +99,22 @@ struct Rng {
 //
 template<class T, size_t N>
 struct SimpleQueue {
-  array<T, N> data;
+  array<T, N> data = {};
   size_t first = 0, last = 0;
 
   T& get() { ASSERT_HOT(first < last); return data[first++]; }
   void put(const T& x) { ASSERT_HOT(last < N); data[last++] = x; }
   bool empty() { return first == last; }
   void clear() { first = last = 0; }
+  size_t size() { return last - first; }
 
   T* begin() { return &data[first]; }
   T* end() { return &data[last]; }
+  const T* begin() const { return &data[first]; }
+  const T* end() const { return &data[last]; }
+
+  T& operator[](int i) { return data[first + i]; }
+  const T& operator[](int i) const { return data[first + i]; }
 };
 
 //

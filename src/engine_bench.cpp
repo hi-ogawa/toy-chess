@@ -7,6 +7,7 @@ TEST_CASE("Engine::go") {
 
   // TODO: Try different hash table size etc..
   // TODO: Collect nice test positions in one place
+  // TODO: Print search statistics (time, nodes, tthit, pruning, reduction, etc...)
   vector<string> fens = {
     "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
     "r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1",
@@ -20,10 +21,11 @@ TEST_CASE("Engine::go") {
       engine.reset();
       engine.position.initialize(fen);
       INFO(timeit::timeit([&]() {
-        engine.go_parameters.depth = 5;
+        engine.go_parameters.depth = 6;
         engine.go(/* blocking */ true);
-        return engine.results.back();
-      }, 1, 4));
+        auto result = engine.results.back();
+        return result;
+      }, 1, 2));
       SUCCEED();
     }
   }

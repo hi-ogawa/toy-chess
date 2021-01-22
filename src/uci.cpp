@@ -104,9 +104,10 @@ void UCI::uci_position(std::istream& command) {
   if (token != "moves") { printError("Invalid position command"); return; }
 
   // In order to distinguish move types (e.g. castling/enpassant), we need full move generation.
+  // TODO: To detect 3-folds repetition, we need to keep last six moves
   for (int i = 0; ; i++) {
     // Reset when reaching stack limit
-    if (i + 1 == Position::kMaxDepth) { engine.position.reset(); i = 0; }
+    if (i == Position::kMaxDepth) { engine.position.reset(); i = 0; }
 
     auto s_move = readToken(command);
     if (s_move.empty()) { break; }
@@ -114,7 +115,7 @@ void UCI::uci_position(std::istream& command) {
     MoveList move_list;
     engine.position.generateMoves(move_list);
     bool found = 0;
-    for (auto [move, _score] : move_list) {
+    for (auto move : move_list) {
       if (!engine.position.isLegal(move)) { continue; }
       if (toString(move) == s_move) {
         found = 1;

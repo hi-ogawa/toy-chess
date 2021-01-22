@@ -48,7 +48,7 @@ TEST_CASE("Position::generateMoves") {
   pos.generateMoves(move_list);
 
   vector<Move> moves;
-  for (auto [move, _score] : move_list) {
+  for (auto move : move_list) {
     if (pos.isLegal(move)) { moves.push_back(move); }
   }
 
@@ -100,7 +100,7 @@ TEST_CASE("Position::State::key") {
   CHECK(key1 == key3);
 }
 
-TEST_CASE("Position::evaluateCapture") {
+TEST_CASE("Position::evaluateMove") {
   auto fen = "r1bqk2r/ppp2ppp/2n1pn2/8/1b1pP3/PPNP4/1BPQ1PPP/R3KBNR b KQkq - 0 1";
   Position pos(fen);
 
@@ -118,7 +118,7 @@ TEST_CASE("Position::evaluateCapture") {
   // +---+---+---+---+-...-+
   //   a   b   c   d
   //
-  Score acutal = pos.evaluateCapture(Move(kD4, kC3));
+  Score acutal = pos.evaluateMove(Move(kD4, kC3));
   Score expected = kPieceValue[kKnight] - kPieceValue[kPawn] + kPieceValue[kBishop] - kPieceValue[kBishop];
   CHECK(acutal == expected);
 }
