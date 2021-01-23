@@ -825,3 +825,134 @@ vector<pair<Move, int64_t>> Position::divide(int depth, int debug) {
   }
   return res;
 }
+
+Move Position::parsePgnMove(const string& move) const {
+  int len = move.size();
+  ASSERT_HOT(2 <= len && len <= 8);
+
+  const char* ptr = move.data();
+
+  // Remove check/checkmate suffix
+  if (ptr[len - 1] == '+') { len--; }
+  if (ptr[len - 1] == '#') { len--; }
+
+  // Castling
+  if (ptr[0] == 'O') {
+    ASSERT_HOT(len == 3 || len == 5);
+    CastlingSide side = (len == 3) ? kOO : kOOO;
+    auto [k_from, k_to, r_from, r_to] = kCastlingMoves[side_to_move][side];
+    return Move(k_from, k_to, kCastling);
+  }
+
+  MoveType move_type = kNormal;
+  PieceType piece = kPawn;
+  PieceType promotion_type = 0;
+  Square from = -1, to = -1;
+  bool is_capture = 0;
+
+  // Remove piece prefix
+  if (ptr[0] == 'N') { piece = kKnight; ptr++; len--; }
+  if (ptr[0] == 'B') { piece = kBishop; ptr++; len--; }
+  if (ptr[0] == 'R') { piece = kRook  ; ptr++; len--; }
+  if (ptr[0] == 'Q') { piece = kQueen ; ptr++; len--; }
+  if (ptr[0] == 'K') { piece = kKing  ; ptr++; len--; }
+
+  // Promotion suffix
+  if (ptr[len - 2] == '=') {
+    move_type = kPromotion;
+    promotion_type = kFenPiecesMapping[move[len - 1]][1];
+    len -= 2;
+  }
+
+  // "to" square
+  to = SQ::fromCoords(ptr[len - 2] - 'a', ptr[len - 1] - '1');
+  len -= 2;
+
+  // Capture
+  if (len > 0 && ptr[len - 1] == 'x') {
+    is_capture = 1;
+    len--;
+  }
+
+  // Resolve "from" square by "square attacked by"
+  ASSERT_HOT(len <= 2);
+
+  if (len == 2) {
+    // File, Rank
+    from = SQ::fromCoords(ptr[0] - 'a', ptr[1] - '1');
+
+  } else {
+    // Similar to "square attacked by"
+    Board b_from = 0;
+    if (piece == kPawn) {
+      if (is_capture) {
+        b_from = pawn_attack_table[!side_to_move][to];
+      } else {
+        Square push1 = to - kPawnPushDirs[side_to_move];
+        b_from |= toBB(push1);
+        if (!(toBB(push1) & occupancy[kBoth])) {
+          Square push2 = to - 2 * kPawnPushDirs[side_to_move];
+          b_from |= toBB(push2) & BB::fromRank(side_to_move ? kRank7 : kRank2);
+        }
+      }
+    }
+    if (piece == kKnight) { b_from = knight_attack_table[to]; }
+    if (piece == kBishop) { b_from = getBishopAttack(to, occupancy[kBoth]); }
+    if (piece == kRook  ) { b_from = getRookAttack(to, occupancy[kBoth]); }
+    if (piece == kQueen ) { b_from = getQueenAttack(to, occupancy[kBoth]); }
+    if (piece == kKing  ) { b_from = king_attack_table[to]; }
+
+    b_from &= pieces[side_to_move][piece];
+
+    // Rank or File fixed
+    if (len == 1 && '1' <= ptr[0] && ptr[0] <= '8') {
+      b_from &= BB::fromRank(ptr[0] - '1');
+    }
+    if (len == 1 && 'a' <= ptr[0] && ptr[0] <= 'h') {
+      b_from &= BB::fromFile(ptr[0] - 'a');
+    }
+
+    ASSERT_HOT(toSQ(b_from).size() >= 1);
+
+    if (toSQ(b_from).size() == 1) {
+      // Uniquely determined
+      from = toSQ(b_from).front();
+
+    } else {
+      // Only one has to legal
+      int cnt = 0;
+      for (auto from_candidate : toSQ(b_from)) {
+        if (isLegal(Move(from_candidate, to, move_type, promotion_type))) {
+          from = from_candidate;
+          cnt++;
+        }
+      }
+      ASSERT_HOT(cnt == 1);
+    }
+  }
+
+  // Enpassant
+  if (is_capture && (toBB(to) & state->ep_square)) {
+    move_type = kEnpassant;
+    ASSERT_HOT(piece == kPawn);
+  }
+
+  return Move(from, to, move_type, promotion_type);
+}
+
+void Position::writeHalfKP(uint16_t* x_w, uint16_t* x_b) const {
+  int k_w = kingSQ(0);
+  int k_b = SQ::flipRank(kingSQ(1));
+  for (Color color = 0; color < 2; color++) {
+    for (PieceType type = 0; type < 5; type++) {
+      for (auto sq : toSQ(pieces[color][type])) {
+        int type_w = type + 5 * (color == 1);
+        int type_b = type + 5 * (color == 0);
+        int sq_w = sq;
+        int sq_b = SQ::flipRank(sq);
+        *(x_w++) = (type_w * 64 + sq_w) * 64 + k_w;
+        *(x_b++) = (type_b * 64 + sq_b) * 64 + k_b;
+      }
+    }
+  }
+}

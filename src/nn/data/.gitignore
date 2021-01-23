@@ -8,3 +8,7 @@ ckpt-*.pt
 ckpt-*.bin
 default.bin
 *.tsv
+*.pgn
+*.pgn.7z
+*.slim-pgn
+*.halfkp-move

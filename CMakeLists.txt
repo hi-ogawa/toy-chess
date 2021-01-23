@@ -104,3 +104,12 @@ target_precompile_headers(main_bench REUSE_FROM main_pch)
 # nn_preprocess
 add_executable(nn_preprocess src/nn/training/preprocess.cpp)
 target_precompile_headers(nn_preprocess REUSE_FROM main_pch)
+
+# nn_preprocess_pgn
+add_executable(nn_preprocess_move src/nn/training/preprocess_move.cpp)
+target_link_libraries(nn_preprocess_move PRIVATE main_lib)
+target_precompile_headers(nn_preprocess_move REUSE_FROM main_pch)
+
+# slim_pgn
+add_executable(slim_pgn src/nn/training/slim_pgn.cpp)
+target_precompile_headers(slim_pgn REUSE_FROM main_pch)

@@ -122,3 +122,9 @@ TEST_CASE("Position::evaluateCapture") {
   Score expected = kPieceValue[kKnight] - kPieceValue[kPawn] + kPieceValue[kBishop] - kPieceValue[kBishop];
   CHECK(acutal == expected);
 }
+
+TEST_CASE("Position::parsePgnMove") {
+  Position pos;
+  Move move = pos.parsePgnMove("e4");
+  CHECK(toString(move) == "e2e4");
+}
