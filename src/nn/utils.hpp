@@ -62,25 +62,28 @@ inline float sumAVX(__m256 x) {
 
 template<int N>
 inline Float dot(Float x[N], Float y[N]) {
-  static_assert(N % kMaxSimdWidth == 0);
+  static_assert(N % (4 * kMaxSimdWidth) == 0);
 
-  if constexpr (kUseFMA) {
-    __m256 res = {0, 0, 0, 0, 0, 0, 0, 0};
-    for (int i = 0; i < N; i += 8) {
-      auto vx = _mm256_load_ps(&x[i]);
-      auto vy = _mm256_load_ps(&y[i]);
-      res = _mm256_fmadd_ps(vx, vy, res);
+  if constexpr (kUseAVX) {
+    // Put four vectors on four registers
+    auto z0 = _mm256_mul_ps(_mm256_load_ps(&x[0 * 8]), _mm256_load_ps(&y[0 * 8]));
+    auto z1 = _mm256_mul_ps(_mm256_load_ps(&x[1 * 8]), _mm256_load_ps(&y[1 * 8]));
+    auto z2 = _mm256_mul_ps(_mm256_load_ps(&x[2 * 8]), _mm256_load_ps(&y[2 * 8]));
+    auto z3 = _mm256_mul_ps(_mm256_load_ps(&x[3 * 8]), _mm256_load_ps(&y[3 * 8]));
+    for (int i = 4 * 8; i < N; i += 4 * 8) {
+      if constexpr (kUseFMA) {
+        z0 = _mm256_fmadd_ps(_mm256_load_ps(&x[i + 0 * 8]), _mm256_load_ps(&y[i + 0 * 8]), z0);
+        z1 = _mm256_fmadd_ps(_mm256_load_ps(&x[i + 1 * 8]), _mm256_load_ps(&y[i + 1 * 8]), z1);
+        z2 = _mm256_fmadd_ps(_mm256_load_ps(&x[i + 2 * 8]), _mm256_load_ps(&y[i + 2 * 8]), z2);
+        z3 = _mm256_fmadd_ps(_mm256_load_ps(&x[i + 3 * 8]), _mm256_load_ps(&y[i + 3 * 8]), z3);
+      } else {
+        z0 = _mm256_add_ps(_mm256_mul_ps(_mm256_load_ps(&x[i + 0 * 8]), _mm256_load_ps(&y[i + 0 * 8])), z0);
+        z1 = _mm256_add_ps(_mm256_mul_ps(_mm256_load_ps(&x[i + 1 * 8]), _mm256_load_ps(&y[i + 1 * 8])), z1);
+        z2 = _mm256_add_ps(_mm256_mul_ps(_mm256_load_ps(&x[i + 2 * 8]), _mm256_load_ps(&y[i + 2 * 8])), z2);
+        z3 = _mm256_add_ps(_mm256_mul_ps(_mm256_load_ps(&x[i + 3 * 8]), _mm256_load_ps(&y[i + 3 * 8])), z3);
+      }
     }
-    return sumAVX(res);
-
-  } else if constexpr (kUseAVX) {
-    __m256 res = {0, 0, 0, 0, 0, 0, 0, 0};
-    for (int i = 0; i < N; i += 8) {
-      auto vx = _mm256_load_ps(&x[i]);
-      auto vy = _mm256_load_ps(&y[i]);
-      res = _mm256_add_ps(res, _mm256_mul_ps(vx, vy));
-    }
-    return sumAVX(res);
+    return sumAVX(_mm256_add_ps(_mm256_add_ps(z0, z1), _mm256_add_ps(z2, z3)));
 
   } else if constexpr (kUseSSE) {
     __m128 res = {0, 0, 0, 0};
