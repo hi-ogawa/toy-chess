@@ -36,6 +36,7 @@ function Main {
     init)
       bash src/nn/training/script.sh hack_gitmodules
       bash src/nn/training/script.sh hack_cmake
+      bash src/nn/training/script.sh install_misc
     ;;
 
     hack_gitmodules)
@@ -48,8 +49,12 @@ function Main {
     ;;
 
     hack_cmake)
-      apt remove cmake
+      apt-get remove cmake
       pip install cmake --upgrade
+    ;;
+
+    install_misc)
+      apt-get install clang lld
     ;;
 
     build_stockfish)
@@ -63,8 +68,9 @@ function Main {
     ;;
 
     build_preprocess)
-      cmake -B build/Release -DCMAKE_BUILD_TYPE=Release
-      cmake --build build/Release -t nn_preprocess
+      python script.py init --clang
+      python script.py build --t nn_preprocess
+      python script.py build --t nn_preprocess_move
     ;;
 
     *)

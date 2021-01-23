@@ -113,6 +113,28 @@ python src/nn/training/main.py \
 
 ![HalfKP Embedding](https://hi-ogawa.github.io/hosting/toy-chess/halfkp-embedding.gif)
 
+===
+
+Move prediction
+
+- Dataset: http://ccrl.chessdom.com/ccrl/4040/games.html
+- Colab notebook: https://colab.research.google.com/drive/12SRSmt-n1eXMuinl6MNc0a1u-xs0UFG6
+
+```
+# Convert from .pgn to .slim-pgn
+dos2unix < src/nn/data/CCRL-4040.[1206633].pgn | build/Release/slim_pgn > src/nn/data/CCRL-4040.[1206633].slim-pgn
+
+# Convert from .slim-pgn to .halfkp-move
+build/Release/nn_preprocess_move --infile src/nn/data/CCRL-4040.[1206633].slim-pgn
+
+# Training
+python src/nn/training/main_move.py \
+  --dataset=src/nn/data/CCRL-4040.[1206633].halfkp-move \
+  --checkpoint-embedding=src/nn/data/ckpt-2021-01-21-06-25-25-epoch-40-acc-0.934-0.924-loss-0.711-0.791-lr-1.5625e-05.pt \
+  --checkpoint-dir=src/nn/data \
+  --command=train
+```
+
 
 References
 
