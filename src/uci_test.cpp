@@ -88,7 +88,7 @@ TEST_CASE("UCI") {
   CHECK_THAT(tester.getLine(), Contains("info"));
   CHECK_THAT(tester.getLine(), Contains("info"));
   CHECK_THAT(tester.getLine(), Contains("info"));
-  CHECK_THAT(tester.getLine(), Contains("info") && Contains("pv g5g7 c7d8 h6h8"));
+  CHECK_THAT(tester.getLine(), Contains("info") && Contains("pv g5g7"));
   CHECK_THAT(tester.getLine(), Contains("bestmove g5g7"));
 
   tester.putLine("quit");

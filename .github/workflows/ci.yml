@@ -16,9 +16,9 @@ jobs:
       - name: Install tools
         run: sudo apt-get update && sudo apt-get install cmake clang
       - name: Build
-        run: python script.py init --clang --b ${{ matrix.build_type }} && python script.py build --b ${{ matrix.build_type }} --t main_test
+        run: python script.py init --b ${{ matrix.build_type }} --clang && python script.py build --b ${{ matrix.build_type }} --t main_test
       - name: === Unit test ===
-        run: python script.py run --no-build --e main_test -- -s
+        run: python script.py run --b ${{ matrix.build_type }} --no-build --e main_test -- -s
   benchmark:
     name: Benchmark
     runs-on: ubuntu-20.04

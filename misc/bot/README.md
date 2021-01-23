@@ -2,16 +2,16 @@
 Run toy-chess as Lichess bot
 
 ```
-# Build
+# Build (by default AVX-FMA enabled)
 docker build --target runner -t hiogawa/toy-chess -f misc/bot/Dockerfile .
-docker build --target runner -t hiogawa/toy-chess:avx --build-arg CMAKE_ARGS="-DUSE_AVX=ON" -f misc/bot/Dockerfile .
+docker build --target runner -t hiogawa/toy-chess:sse --build-arg CMAKE_ARGS="-DUSE_SSE=ON -DUSE_AVX=OFF -DUSE_FMA=OFF" -f misc/bot/Dockerfile .
 
 # Run locally
 docker run --env LICHESS_TOKEN=(...secret...) --env LICHESS_BOT_OPTIONS="-v" --rm hiogawa/toy-chess
 
 # Push to Docker hub
 docker push hiogawa/toy-chess
-docker push hiogawa/toy-chess:avx
+docker push hiogawa/toy-chess:sse
 ```
 
 

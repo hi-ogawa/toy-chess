@@ -11,7 +11,7 @@ jobs:
     name: Bot
     runs-on: ubuntu-20.04
     container:
-      image: hiogawa/toy-chess:avx
+      image: hiogawa/toy-chess
       env:
         LICHESS_TOKEN: ${{ secrets.LICHESS_TOKEN }}
         LICHESS_BOT_OPTIONS: ${{ github.event.inputs.options }}
