@@ -1,0 +1,2 @@
+# Cf. https://github.com/github/linguist/issues/3496
+*.ipynb linguist-generated
