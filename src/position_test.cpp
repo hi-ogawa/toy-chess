@@ -134,3 +134,9 @@ TEST_CASE("Position::isRepetition") {
   pos.makeMove(Move(kH5, kD1));
   CHECK(pos.isRepetition() == true);
 }
+
+TEST_CASE("Position::parsePgnMove") {
+  Position pos;
+  Move move = pos.parsePgnMove("e4");
+  CHECK(toString(move) == "e2e4");
+}

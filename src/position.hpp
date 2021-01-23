@@ -46,9 +46,10 @@ struct Position {
     recompute(2);
   }
 
-  // Reset internal stack etc...
+  // Reset internal stack
   void reset() {
-    initialize(toFen());
+    state_stack[0] = *state;
+    state = &state_stack[0];
   }
 
   void pushState() {
@@ -75,6 +76,9 @@ struct Position {
   void printFen(std::ostream&) const;
   void print(std::ostream& ostr = std::cerr) const;
   friend std::ostream& operator<<(std::ostream& ostr, const Position& self) { self.print(ostr); return ostr; }
+
+  Move parsePgnMove(const string&) const;
+  void writeHalfKP(uint16_t*, uint16_t*) const;
 
   //
   // Utility
