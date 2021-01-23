@@ -58,6 +58,7 @@ def main_cli():
     print("-- KeyboardInterrupt --")
   except subprocess.CalledProcessError as e:
     print(f"-- {e} --")
+    sys.exit(1)
 
 
 if __name__ == "__main__":
