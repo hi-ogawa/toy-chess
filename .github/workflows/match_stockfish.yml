@@ -59,4 +59,5 @@ jobs:
           name: artifact
           path: |
             misc/match/data/result-*.pgn
-            misc/match/data/log-*.txt
+            misc/match/data/debug-*.txt
+            misc/match/data/stderr-*.txt
