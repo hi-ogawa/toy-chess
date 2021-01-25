@@ -1,0 +1,62 @@
+name: Match (stockfish)
+on:
+  workflow_dispatch:
+    inputs:
+      sf_elo:
+        description: Stockfish ELO
+        required: true
+        default: 2000
+      rounds:
+        description: Number of rounds
+        required: true
+        default: 10
+      concurrency:
+        description: Concurrency of matches
+        required: true
+        default: 2
+      time_control:
+        description: Time control (e.g. 10+0.1, 60+0.6, etc...)
+        required: true
+        default: "10+0.1"
+jobs:
+  match:
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: true
+      - uses: actions/setup-python@v2
+
+      - name: Install tools
+        run: sudo apt-get update && sudo apt-get install cmake clang qt5-default
+
+      - name: Install cutechess-cli
+        run: >
+          wget https://github.com/cutechess/cutechess/releases/download/1.2.0/cutechess_20200809+1.2.0+1.2.0-1_amd64.deb &&
+          sudo dpkg -i cutechess_20200809+1.2.0+1.2.0-1_amd64.deb
+
+      - name: Download opening book
+        run: >
+          wget -P misc/match/data https://github.com/official-stockfish/books/raw/master/noob_3moves.epd.zip &&
+          unzip -d misc/match/data misc/match/data/noob_3moves.epd.zip
+
+      - name: Build toy-chess
+        run: python script.py init --clang && python script.py build --t main
+
+      - name: Build stockfish
+        run: make -C thirdparty/Stockfish/src -j build
+
+      - name: === Match ===
+        run: >
+          TC=${{ github.event.inputs.time_control }}
+          CONCURRENCY=${{ github.event.inputs.concurrency }}
+          ROUNDS=${{ github.event.inputs.rounds }}
+          SF_ELO=${{ github.event.inputs.sf_elo }}
+          bash misc/match/run.sh
+
+      - uses: actions/upload-artifact@v2
+        with:
+          name: artifact
+          path: |
+            misc/match/data/result-*.pgn
+            misc/match/data/log-*.txt
