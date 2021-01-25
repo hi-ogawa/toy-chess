@@ -738,6 +738,15 @@ bool Position::isLegal(const Move& move) const {
   return 1;
 }
 
+Move Position::getRandomMove() const {
+  MoveList list;
+  generateMoves(list);
+  for (auto move : list) {
+    if (isLegal(move)) { return move; }
+  }
+  return kNoneMove;
+}
+
 Score Position::evaluateMove(const Move& move) {
   if (move.type() == kCastling) { return 0; }
 
@@ -775,7 +784,7 @@ Score Position::computeSEE(Square to) {
 }
 
 Move Position::getLVA(Color own, Square to) const {
-  // TODO: Acount for promoted piece value
+  // TODO: Account for promoted piece value
   // TODO: Can we do without full legality check?
   bool is_backrank = SQ::toRank(to) == kBackrank[!side_to_move];
 

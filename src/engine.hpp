@@ -13,8 +13,6 @@ struct SearchResult {
   int64_t stats_tt_hit = 0;
   int64_t stats_tt_cut = 0;
   int64_t stats_futility_prune = 0;
-  int64_t stats_null_prune = 0;
-  int64_t stats_null_prune_success = 0;
   int64_t stats_lmr = 0;
   int64_t stats_lmr_success = 0;
   MoveList pv;
@@ -64,7 +62,7 @@ struct SearchState {
 
   void reset() {
     pv.clear();
-    killers = {};
+    (this + 1)->killers = {};
   }
 };
 
@@ -113,13 +111,14 @@ struct Engine {
   std::function<void(const SearchResult&)> search_result_callback = [](auto){};
 
   SearchState* state = nullptr;
-  array<SearchState, Position::kMaxDepth> search_state_stack;
+  array<SearchState, Position::kMaxDepth + 1> search_state_stack;
 
   Engine() {
     load(kEmbeddedWeightName);
     position.evaluator = &evaluator;
     position.reset();
     transposition_table.resizeMB(kDefaultTableSizeMB);
+    state = &search_state_stack[0];
   }
 
   void reset() {

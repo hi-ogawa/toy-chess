@@ -80,8 +80,6 @@ void Engine::go(bool blocking) {
 
 void Engine::goImpl() {
   time_control.initialize(go_parameters, position.side_to_move, position.game_ply);
-  // TODO: When no increment, this might fail (essentiall we got flagged...)
-  ASSERT(checkSearchLimit());
 
   // Debug info
   SearchResult info;
@@ -96,14 +94,17 @@ void Engine::goImpl() {
   ASSERT(depth_end > 0);
   results.assign(depth_end + 1, {});
 
-  // Construct result for depth = 1 so that there always is "bestmove" result.
-  int last_depth = 1;
-  results[1] = search(1);
-  results[1].type = kSearchResultInfo;
-  search_result_callback(results[1]);
+  int best_index = 0;
+
+  // Get random first move just in case we don't even have time for "depth 1"
+  Move first_move = position.getRandomMove();
+  ASSERT(first_move != kNoneMove);
+  results[0] = { .type = kSearchResultInfo, .depth = 1, .score = 0, .stats_time = 1, .stats_nodes = 1 };
+  results[0].pv.put(first_move);
+  search_result_callback(results[0]);
 
   // Iterative deepening
-  for (int depth = 2; depth <= depth_end; depth++) {
+  for (int depth = 1; depth <= depth_end; depth++) {
     SearchResult res;
     if (depth < 4) {
       res = search(depth);
@@ -113,7 +114,7 @@ void Engine::goImpl() {
     if (!checkSearchLimit()) { break; } // Ignore possibly incomplete result
 
     // Save result and send "info ..."
-    last_depth = depth;
+    best_index = depth;
     results[depth] = res;
     results[depth].type = kSearchResultInfo;
     results.push_back(results[depth]);
@@ -124,15 +125,15 @@ void Engine::goImpl() {
     res_info.type = kSearchResultInfo;
     res_info.debug += "tt_hit = " + toString(res.stats_tt_hit) + ", ";
     res_info.debug += "tt_cut = " + toString(res.stats_tt_cut) + ", ";
-    res_info.debug += "null_prune = " + toString(res.stats_null_prune_success) + "/" + toString(res.stats_null_prune) + ", ";
     res_info.debug += "futility_prune = " + toString(res.stats_futility_prune) + ", ";
     res_info.debug += "lmr = " + toString(res.stats_lmr_success) + "/" + toString(res.stats_lmr);
     search_result_callback(res_info);
   }
 
   // Send "bestmove ..."
-  results[last_depth].type = kSearchResultBestMove;
-  search_result_callback(results[last_depth]);
+  SearchResult best = results[best_index];
+  best.type = kSearchResultBestMove;
+  search_result_callback(best);
 }
 
 SearchResult Engine::searchWithAspirationWindow(int depth, Score init_target) {
@@ -151,7 +152,7 @@ SearchResult Engine::searchWithAspirationWindow(int depth, Score init_target) {
     SearchResult res;
     res.depth = depth;
 
-    state = &search_state_stack[0];
+    state->reset();
     Score score = searchImpl(alpha, beta, 0, depth, res);
     if (!checkSearchLimit()) { return {}; }
 
@@ -183,7 +184,7 @@ SearchResult Engine::search(int depth) {
   SearchResult res;
   res.depth = depth;
 
-  state = &search_state_stack[0];
+  state->reset();
   res.score = searchImpl(-kScoreInf, kScoreInf, 0, depth, res);
   res.pv = state->pv;
   res.stats_time = time_control.getTime() + 1;
@@ -211,6 +212,7 @@ Score Engine::searchImpl(Score alpha, Score beta, int depth, int depth_end, Sear
   Move tt_move = tt_hit ? tt_entry.move : kNoneMove;
   MoveList searched_quiets, searched_captures;
   int move_cnt = 0;
+  int searched_move_cnt = 0;
 
   // Use lambda to skip from anywhere to the end
   ([&]() {
@@ -246,9 +248,41 @@ Score Engine::searchImpl(Score alpha, Score beta, int depth, int depth_end, Sear
       move_cnt++;
 
       bool is_capture = position.isCaptureOrPromotion(move);
+      bool gives_check = position.givesCheck(move);
+      Score history_score = is_capture ? history.getCaptureScore(position, move) : history.getQuietScore(position, move);
       (is_capture ? searched_captures : searched_quiets).put(move);
 
+      // Futility pruning
+      if (!is_capture && !in_check && !gives_check && depth_to_go <= 3) {
+        if (evaluation + 200 * depth_to_go < alpha && history_score < -10) {
+          result.stats_futility_prune++;
+          continue;
+        }
+      }
+
       makeMove(move);
+
+      // Late move reduction
+      if (!in_check && !gives_check && depth >= 1 && depth_to_go >= 3 && move_cnt >= 3) {
+        int reduction = 0;
+        reduction += !is_capture;
+        reduction += (history_score < 0);
+        reduction += (history_score < -500);
+        reduction = std::min(reduction, depth_to_go - 2);
+        if (reduction > 0) {
+          Score lmr_score = -searchImpl(-(alpha + 1), -alpha, depth + 1, depth_end - reduction, result);
+          if (!checkSearchLimit()) { unmakeMove(move); interrupted = 1; return; }
+
+          result.stats_lmr++;
+          if (lmr_score <= alpha) {
+            result.stats_lmr_success++;
+            unmakeMove(move);
+            continue;
+          }
+        }
+      }
+
+      searched_move_cnt++;
       score = std::max<Score>(score, -searchImpl(-beta, -alpha, depth + 1, depth_end, result));
       unmakeMove(move);
       if (!checkSearchLimit()) { interrupted = 1; return; }
@@ -265,6 +299,9 @@ Score Engine::searchImpl(Score alpha, Score beta, int depth, int depth_end, Sear
         state->updatePV(move, (state + 1)->pv);
       }
     }
+
+    // All moves pruned
+    if (move_cnt > 0 && searched_move_cnt == 0) { score = evaluation; }
 
     // Checkmate/stalemate
     if (move_cnt == 0) { score = std::max<Score>(score, position.evaluateLeaf(depth)); }
@@ -308,6 +345,7 @@ Score Engine::quiescenceSearch(Score alpha, Score beta, int depth, SearchResult&
   bool in_check = position.state->checkers;
   Move tt_move = tt_hit ? tt_entry.move : kNoneMove;
   int move_cnt = 0;
+  int searched_move_cnt = 0;
 
   ([&]() {
 
@@ -347,6 +385,21 @@ Score Engine::quiescenceSearch(Score alpha, Score beta, int depth, SearchResult&
     Move move;
     while (move_picker.getNext(move)) {
       move_cnt++;
+
+      bool is_capture = position.isCaptureOrPromotion(move);
+      bool gives_check = position.givesCheck(move);
+
+      // Futility pruning
+      if (!in_check && !gives_check) {
+        Score history_score = is_capture ? history.getCaptureScore(position, move) : history.getQuietScore(position, move);
+        Score see_score = position.evaluateMove(move);
+        if (evaluation + 100 < alpha && (history_score < -10 || see_score < -100)) {
+          result.stats_futility_prune++;
+          continue;
+        }
+      }
+
+      searched_move_cnt++;
       makeMove(move);
       score = std::max<Score>(score, -quiescenceSearch(-beta, -alpha, depth + 1, result));
       unmakeMove(move);
