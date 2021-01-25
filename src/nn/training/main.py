@@ -142,7 +142,7 @@ def my_loss_func(y_model, y_target, loss_mode):
     return F.binary_cross_entropy_with_logits(y_model, torch.sigmoid(y_target))
 
 
-def train(dataset_file, test_dataset_file, ckpt_file, ckpt_dir, num_epochs, batch_size, num_workers, weight_decay, learning_rate, loss_mode, scheduler_patience):
+def train(dataset_file, test_dataset_file, ckpt_file, ckpt_dir, num_epochs, batch_size, num_workers, weight_decay, learning_rate, loss_mode, scheduler_patience, **kwargs):
   print(":: Loading dataset")
   train_dataset = MyBatchDataset(dataset_file, batch_size)
   if test_dataset_file:
