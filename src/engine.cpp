@@ -11,6 +11,11 @@ void TimeControl::initialize(const GoParameters& go, Color own, int ply) {
     double inc = go.inc[own];
     int cnt = go.movestogo ? go.movestogo : std::max(10, 32 - ply / 2);
     duration = std::min(duration, (time + inc * (cnt - 1)) / cnt); // Split remaining time to each move
+
+    if (ply <= 8) {
+      double opening_time = 1000.0 + (1000. / 8.) * ply;
+      duration = std::min(duration, opening_time);
+    }
   }
   finish = start + Msec(int64_t(kSafeFactor * duration));
 };
