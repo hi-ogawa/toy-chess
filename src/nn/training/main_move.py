@@ -1,5 +1,5 @@
 #
-# Predict "move to" square
+# Predict "from/to"
 #
 
 import torch
@@ -14,23 +14,24 @@ import os
 # Model
 #
 
-WIDTH1 = 10 * 64 * 64 # input = { (piece-type, piece-position, king-position) }
+WIDTH1 = 10 * 64 * 64
 WIDTH2 = 128
-WIDTH3 = 64
-WIDTH4 = 64
-WIDTH_OUT = 64
+WIDTH_OUT = 64 * 64
 EMBEDDING_WIDTH = WIDTH1 + 1
 EMBEDDING_PAD = WIDTH1
 
 DTYPE = torch.float32
 
 class MyModel(nn.Module):
-  def __init__(self, embedding_weight):
+  def __init__(self):
     super(MyModel, self).__init__()
-    self.embedding = nn.Embedding.from_pretrained(embedding_weight, padding_idx=EMBEDDING_PAD)
-    self.l2 = nn.Linear(2 * WIDTH2, WIDTH3)
-    self.l3 = nn.Linear(WIDTH3, WIDTH4)
-    self.l4 = nn.Linear(WIDTH4, WIDTH_OUT)
+    self.embedding = nn.Embedding(EMBEDDING_WIDTH, WIDTH2, padding_idx=EMBEDDING_PAD)
+    init_scale = np.sqrt(2 * 3 / WIDTH1) # cf. nn.init.kaiming_uniform_
+    nn.init.uniform_(self.embedding.weight, -init_scale, init_scale)
+    self.l2 = nn.Linear(2 * WIDTH2, WIDTH_OUT)
+
+  def load_embedding(self, weight):
+    self.embedding = nn.Embedding.from_pretrained(weight, padding_idx=EMBEDDING_PAD)
 
   def forward(self, x_w, x_b):
     x_w = self.embedding(x_w)
@@ -40,10 +41,6 @@ class MyModel(nn.Module):
     x = torch.cat([x_w, x_b], dim=-1)
     x = F.relu(x)
     x = self.l2(x)
-    x = F.relu(x)
-    x = self.l3(x)
-    x = F.relu(x)
-    x = self.l4(x)
     return x
 
 #
@@ -124,10 +121,12 @@ def train(dataset_file, test_dataset_file, checkpoint_embedding, ckpt_file, ckpt
     test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=None, num_workers=num_workers, pin_memory=True)
 
   print(":: Loading model")
-  embedding_weight = torch.load(checkpoint_embedding, map_location=DEVICE)['model_state_dict']['embedding.weight']
   torch.manual_seed(MODEL_INIT_SEED)
-  model = MyModel(embedding_weight)
+  model = MyModel()
   model.to(DEVICE)
+  if checkpoint_embedding:
+    embedding_weight = torch.load(checkpoint_embedding, map_location=DEVICE)['model_state_dict']['embedding.weight']
+    model.load_embedding(embedding_weight)
   print(model)
 
   optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
@@ -138,6 +137,9 @@ def train(dataset_file, test_dataset_file, checkpoint_embedding, ckpt_file, ckpt
     print(f":: Loading checkpoint ({ckpt_file})")
     ckpt = torch.load(ckpt_file, map_location=DEVICE)
     model.load_state_dict(ckpt["model_state_dict"])
+    if checkpoint_embedding:
+      embedding_weight = torch.load(checkpoint_embedding, map_location=DEVICE)['model_state_dict']['embedding.weight']
+      model.load_embedding(embedding_weight)
     optimizer.load_state_dict(ckpt["optimizer_state_dict"])
     scheduler.load_state_dict(ckpt["scheduler_state_dict"])
     init_epoch = ckpt["epoch"] + 1
@@ -165,7 +167,9 @@ def train(dataset_file, test_dataset_file, checkpoint_embedding, ckpt_file, ckpt
 
     test_acc = 0
     test_loss = 0
-    if test_dataset_file:
+    if test_dataset_file is None:
+      scheduler.step(train_loss)
+    else:
       print(f":: --- Validation ---")
       metric = MyMetric()
       model.eval()
@@ -216,7 +220,7 @@ def main_cli():
   parser = argparse.ArgumentParser()
   parser.add_argument("--dataset", type=str)
   parser.add_argument("--test-dataset", type=str)
-  parser.add_argument("--checkpoint-embedding", type=str, required=True)
+  parser.add_argument("--checkpoint-embedding", type=str)
   parser.add_argument("--checkpoint", type=str)
   parser.add_argument("--checkpoint-dir", type=str)
   parser.add_argument("--weight-file", type=str)

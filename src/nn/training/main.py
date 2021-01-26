@@ -30,6 +30,9 @@ class MyModel(nn.Module):
     self.l3 = nn.Linear(WIDTH3, WIDTH4)
     self.l4 = nn.Linear(WIDTH4, 1)
 
+  def load_embedding(self, weight):
+    self.embedding = nn.Embedding.from_pretrained(weight, padding_idx=EMBEDDING_PAD)
+
   def forward(self, x_w, x_b):
     x_w = self.embedding(x_w)
     x_b = self.embedding(x_b)
@@ -123,8 +126,6 @@ MODEL_INIT_SEED = 0x12345678
 SCORE_SCALE = 208
 SCORE_TEMPO = 28
 
-DEBUG_CUDA_MEMORY = False
-
 def normalize_score(y):
   return (y - SCORE_TEMPO) / SCORE_SCALE
 
@@ -142,7 +143,7 @@ def my_loss_func(y_model, y_target, loss_mode):
     return F.binary_cross_entropy_with_logits(y_model, torch.sigmoid(y_target))
 
 
-def train(dataset_file, test_dataset_file, ckpt_file, ckpt_dir, num_epochs, batch_size, num_workers, weight_decay, learning_rate, loss_mode, scheduler_patience, **kwargs):
+def train(dataset_file, test_dataset_file, checkpoint_embedding, ckpt_file, ckpt_dir, num_epochs, batch_size, num_workers, weight_decay, learning_rate, loss_mode, scheduler_patience, **kwargs):
   print(":: Loading dataset")
   train_dataset = MyBatchDataset(dataset_file, batch_size)
   if test_dataset_file:
@@ -156,6 +157,9 @@ def train(dataset_file, test_dataset_file, ckpt_file, ckpt_dir, num_epochs, batc
   torch.manual_seed(MODEL_INIT_SEED)
   model = MyModel()
   model.to(DEVICE)
+  if checkpoint_embedding:
+    embedding_weight = torch.load(checkpoint_embedding, map_location=DEVICE)['model_state_dict']['embedding.weight']
+    model.load_embedding(embedding_weight)
   print(model)
 
   optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
@@ -166,6 +170,9 @@ def train(dataset_file, test_dataset_file, ckpt_file, ckpt_dir, num_epochs, batc
     print(f":: Loading checkpoint ({ckpt_file})")
     ckpt = torch.load(ckpt_file, map_location=DEVICE)
     model.load_state_dict(ckpt["model_state_dict"])
+    if checkpoint_embedding:
+      embedding_weight = torch.load(checkpoint_embedding, map_location=DEVICE)['model_state_dict']['embedding.weight']
+      model.load_embedding(embedding_weight)
     optimizer.load_state_dict(ckpt["optimizer_state_dict"])
     scheduler.load_state_dict(ckpt["scheduler_state_dict"])
     init_epoch = ckpt["epoch"] + 1
@@ -186,20 +193,14 @@ def train(dataset_file, test_dataset_file, ckpt_file, ckpt_dir, num_epochs, batc
         loss = my_loss_func(y_model, y_target, loss_mode)
         loss.backward()
         optimizer.step()
-        loss_L1 = F.l1_loss(y_model, y_target)
         metric.update(y_model.detach().cpu(), y_target.detach().cpu(), loss.detach().cpu() * y_model.numel())
-        progressbar.set_postfix(loss_L1=float(loss_L1), loss=float(loss))
+        _mean, _std, run_l1, run_acc, run_loss = metric.compute()
+        progressbar.set_postfix(loss=float(loss), run_loss=float(run_loss), run_acc=float(run_acc), run_l1=float(run_l1))
         del x_w, x_b, y_target, y_model
-        if i % 1000 == 0 and DEVICE.type == 'cuda' and DEBUG_CUDA_MEMORY:
-          print(f"i = {i}")
-          print(torch.cuda.memory_summary())
-    mean, std, l1, accuracy, metric_loss = metric.compute()
-    print(f"mean = {mean}, std = {std}, L1 = {l1}, accuracy = {accuracy}, loss = {metric_loss}")
-    train_loss = metric_loss
-    train_accuracy = accuracy
+    _mean, _std, _l1, train_acc, train_loss = metric.compute()
 
     test_loss = 0
-    test_accuracy = 0
+    test_acc = 0
     if test_dataset_file:
       print(f":: Validation loop")
       metric = MyMetric()
@@ -211,10 +212,9 @@ def train(dataset_file, test_dataset_file, ckpt_file, ckpt_dir, num_epochs, batc
         loss = my_loss_func(y_model, y_target, loss_mode)
         metric.update(y_model.detach().cpu(), y_target.detach().cpu(), loss.detach().cpu() * y_model.numel())
         del x_w, x_b, y_target, y_model
-      mean, std, l1, accuracy, metric_loss = metric.compute()
-      print(f"mean = {mean}, std = {std}, L1 = {l1}, accuracy = {accuracy}, loss = {metric_loss}")
-      test_loss = metric_loss
-      test_accuracy = accuracy
+        _mean, _std, run_l1, run_acc, run_loss = metric.compute()
+        progressbar.set_postfix(loss=float(loss), run_loss=float(run_loss), run_acc=float(run_acc), run_ls=float(run_l1))
+      _mean, _std, _l1, _acc, test_loss = metric.compute()
       scheduler.step(test_loss)
 
     if ckpt_dir is not None:
@@ -225,7 +225,7 @@ def train(dataset_file, test_dataset_file, ckpt_file, ckpt_dir, num_epochs, batc
         "epoch": epoch,
       }
       timestamp = datetime.strftime(datetime.now(), "%F-%H-%M-%S")
-      ckpt_file = f"{ckpt_dir}/ckpt-{timestamp}-epoch-{epoch}-acc-{float(train_accuracy):.3}-{float(test_accuracy):.3}-loss-{float(train_loss):.3}-{float(test_loss):.3}-lr-{float(lr)}.pt"
+      ckpt_file = f"{ckpt_dir}/ckpt-{timestamp}-epoch-{epoch}-acc-{float(train_acc):.3}-{float(test_acc):.3}-loss-{float(train_loss):.3}-{float(test_loss):.3}-lr-{float(lr)}.pt"
       print(f":: Saving checkpoint ({ckpt_file})")
       torch.save(ckpt, ckpt_file)
 
@@ -373,6 +373,7 @@ def main_cli():
   parser = argparse.ArgumentParser()
   parser.add_argument("--dataset", type=str)
   parser.add_argument("--test-dataset", type=str)
+  parser.add_argument("--checkpoint-embedding", type=str)
   parser.add_argument("--checkpoint", type=str)
   parser.add_argument("--checkpoint-dir", type=str)
   parser.add_argument("--weight-file", type=str)
@@ -382,8 +383,7 @@ def main_cli():
   parser.add_argument("--weight-decay", type=float, default=0)
   parser.add_argument("--learning-rate", type=float, default=0.001)
   parser.add_argument("--scheduler-patience", type=float, default=0)
-  parser.add_argument("--loss-mode", type=str, default="bce")
-  # export_embedding
+  parser.add_argument("--loss-mode", type=str, default="mse")
   parser.add_argument("--data-tsv", type=str)
   parser.add_argument("--meta-tsv", type=str)
   parser.add_argument("--regex", type=str, default='.')

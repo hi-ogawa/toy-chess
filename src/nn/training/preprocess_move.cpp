@@ -29,15 +29,20 @@ void preprocess(const string& infile, const string& outfile, int minply, int max
 
     uint16_t* x_w = &entry[0];  // [0:31]
     uint16_t* x_b = &entry[31]; // [31:62]
-    uint16_t& to = entry[62];  // [62:63]
+    uint16_t* y = &entry[62];  // [62:63]
 
     // Position and move are white perspective
     if (pos.side_to_move == kBlack) { std::swap(x_w, x_b); }
     pos.writeHalfKP(x_w, x_b);
 
-    // "To" square
-    to = move.to();
-    if (pos.side_to_move == kBlack) { to = SQ::flipRank(to); }
+    // Encode (from, to)
+    Square from = move.from();
+    Square to = move.to();
+    if (pos.side_to_move == kBlack) {
+      from = SQ::flipRank(from);
+      to = SQ::flipRank(to);
+    }
+    *y = from * 64 + to;
   };
 
   const int kShuffleSeed = 0x12345678;
@@ -59,7 +64,7 @@ void preprocess(const string& infile, const string& outfile, int minply, int max
 
     std::istringstream sstr(line);
     pos.initialize(kFenInitialPosition);
-    for (int i = 0; i < maxply; i += 2) {
+    for (int i = 0; pos.game_ply < maxply; i += 2) {
       // Reset internal stack
       if (i >= 200) { pos.reset(); i = 0; }
 
@@ -71,7 +76,7 @@ void preprocess(const string& infile, const string& outfile, int minply, int max
       sstr >> token;
       Move w_move = pos.parsePgnMove(token);
       ASSERT_HOT(pos.isLegal(w_move));
-      if (i >= minply) { write_entry(w_move); }
+      if (pos.game_ply >= minply) { write_entry(w_move); }
       pos.makeMove(w_move);
 
       // Black move or result
@@ -79,7 +84,7 @@ void preprocess(const string& infile, const string& outfile, int minply, int max
       if (token == "1-0" || token == "0-1" || token == "1/2-1/2") { break; }
       Move b_move = pos.parsePgnMove(token);
       ASSERT_HOT(pos.isLegal(b_move));
-      if (i >= minply) { write_entry(b_move); }
+      if (pos.game_ply >= minply) { write_entry(b_move); }
       pos.makeMove(b_move);
     }
   }
