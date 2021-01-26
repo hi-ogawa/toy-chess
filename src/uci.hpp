@@ -11,6 +11,9 @@ struct Event {
   //   So, for now, we simply hold both two exclusive entries.
   string command;
   SearchResult search_result;
+
+  Event(const string& arg) : type{kCommandEvent}, command{arg} {}
+  Event(const SearchResult& arg) : type{kSearchResultEvent}, search_result{arg} {}
 };
 
 struct UCI {

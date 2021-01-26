@@ -4,8 +4,8 @@ UCI::UCI(std::istream& istr, std::ostream& ostr, std::ostream& err_ostr)
   : istr{istr}, ostr{ostr}, err_ostr{err_ostr} {
 
   // Setup callback for asynchronous Engine::go
-  engine.search_result_callback = [&](const SearchResult& search_result) {
-    queue.put(Event({ .type = kSearchResultEvent, .search_result = search_result }));
+  engine.search_result_callback = [this](const SearchResult& search_result) {
+    queue.put(Event(search_result));
   };
 }
 
@@ -17,12 +17,10 @@ int UCI::mainLoop() {
 }
 
 void UCI::startCommandListenerThread() {
-  auto work = [&]() {
+  auto work = [this]() {
     string data;
-    while (std::getline(istr, data) && data != "quit") {
-      queue.put(Event({ .type = kCommandEvent, .command = data }));
-    }
-    queue.put(Event({ .type = kCommandEvent, .command = "quit" }));
+    while (std::getline(istr, data) && data != "quit") { queue.put(Event(data)); }
+    queue.put(Event("quit"));
     return true;
   };
   command_listener_thread_future = std::async(work);

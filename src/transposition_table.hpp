@@ -37,7 +37,6 @@ struct TranspositionTable {
   static_assert(sizeof(Entry) == 32);
 
   uint64_t size = 0;
-  uint64_t size_mask = 0;
   vector<Entry> data;
 
   void reset() {
@@ -47,7 +46,6 @@ struct TranspositionTable {
   void resize(uint64_t new_size) {
     ASSERT(new_size > 0);
     size = new_size;
-    size_mask = (1ULL << (63 - __builtin_clzll(size))) - 1;
     reset();
   }
 
@@ -58,13 +56,14 @@ struct TranspositionTable {
   uint16_t toUpperKey(uint64_t key) { return key >> 48; }
 
   bool get(uint64_t key, Entry& entry) {
-    uint64_t index = key & size_mask;
+    uint64_t index = key % size;
+    ASSERT(index < size);
     entry = data[index];
     return entry.upper_key == toUpperKey(key);
   }
 
   void put(uint64_t key, const Entry& entry) {
-    uint64_t index = key & size_mask;
+    uint64_t index = key % size;
     data[index] = entry;
     data[index].upper_key = toUpperKey(key);
   }

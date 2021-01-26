@@ -32,8 +32,8 @@ struct Position {
   };
 
   State* state = nullptr;
-  const static inline int kMaxDepth = 255;
-  array<State, kMaxDepth + 1> state_stack;
+  const static inline int kMaxDepth = 256;
+  array<State, kMaxDepth + 64> state_stack;
 
   Position(const string& fen = kFenInitialPosition) {
     initialize(fen);
@@ -52,6 +52,10 @@ struct Position {
   }
 
   void pushState() {
+    // TODO:
+    //   Currently, it's quite loose tracking stack overflow due to many "makeMove" recursions (search, qsearch, see).
+    //   For now, just keep enough margin so engine won't crush "almost surely".
+    ASSERT(state < &state_stack.back());
     state++;
     *(state) = *(state - 1);
   }

@@ -53,17 +53,20 @@ void Engine::print(std::ostream& ostr) {
 
 void Engine::stop() {
   if (!isRunning()) { return; }
+  // TODO: This assertion fails even though it seems impossible...
   ASSERT(!stop_requested.load(std::memory_order_acquire));
   stop_requested.store(true, std::memory_order_release);
   wait();
   stop_requested.store(false, std::memory_order_release);
+  ASSERT(!isRunning());
 }
 
 void Engine::wait() {
   ASSERT(go_thread_future.valid()); // Check Engine::go didn't meet with Engine::wait yet
   go_thread_future.wait();
-  ASSERT(go_thread_future.get());
-  go_thread_future = {}; // Invalidate future
+  // TODO: Segmentation fault in "future::get"???
+  ASSERT(go_thread_future.get()); // "get" will invalidate "future"
+  ASSERT(!go_thread_future.valid());
 }
 
 bool Engine::checkSearchLimit() {
@@ -74,7 +77,7 @@ bool Engine::checkSearchLimit() {
 
 void Engine::go(bool blocking) {
   ASSERT(!go_thread_future.valid()); // Check previous Engine::go met with Engine::wait
-  go_thread_future = std::async([&]() { goImpl(); return true; });
+  go_thread_future = std::async([this]() { goImpl(); return true; });
   if (blocking) { wait(); }
 }
 
@@ -117,7 +120,6 @@ void Engine::goImpl() {
     best_index = depth;
     results[depth] = res;
     results[depth].type = kSearchResultInfo;
-    results.push_back(results[depth]);
     search_result_callback(results[depth]);
 
     // Debug info
@@ -222,6 +224,7 @@ Score Engine::searchImpl(Score alpha, Score beta, int depth, int depth_end, Sear
       if (depth_to_go <= tt_entry.depth) {
         if (beta <= tt_entry.score && (tt_entry.node_type == kCutNode || tt_entry.node_type == kPVNode)) {
           score = tt_entry.score;
+          ASSERT(-kScoreInf < score && score < kScoreInf);
           node_type = kCutNode;
           best_move = tt_move;
           result.stats_tt_cut++;
@@ -229,6 +232,7 @@ Score Engine::searchImpl(Score alpha, Score beta, int depth, int depth_end, Sear
         }
         if (tt_entry.score <= alpha && tt_entry.node_type == kAllNode) {
           score = tt_entry.score;
+          ASSERT(-kScoreInf < score && score < kScoreInf);
           node_type = kAllNode;
           result.stats_tt_cut++;
           return;
@@ -304,7 +308,7 @@ Score Engine::searchImpl(Score alpha, Score beta, int depth, int depth_end, Sear
     if (move_cnt > 0 && searched_move_cnt == 0) { score = evaluation; }
 
     // Checkmate/stalemate
-    if (move_cnt == 0) { score = std::max<Score>(score, position.evaluateLeaf(depth)); }
+    if (move_cnt == 0) { score = position.evaluateLeaf(depth); }
 
   })(); // Lambda End
 
@@ -328,6 +332,9 @@ Score Engine::searchImpl(Score alpha, Score beta, int depth, int depth_end, Sear
 
 Score Engine::quiescenceSearch(Score alpha, Score beta, int depth, SearchResult& result) {
   if (!checkSearchLimit()) { return kScoreNone; }
+
+  // TODO:
+  //   When both sides are picking tt_move, it can quicly go into infinite recursion.
 
   result.stats_nodes++;
   if (depth >= Position::kMaxDepth) { return position.evaluate(); }
@@ -354,6 +361,7 @@ Score Engine::quiescenceSearch(Score alpha, Score beta, int depth, SearchResult&
       if (tt_entry.node_type == kCutNode || tt_entry.node_type == kPVNode) {
         if (beta <= tt_entry.score) {
           score = tt_entry.score;
+          ASSERT(-kScoreInf < score && score < kScoreInf);
           node_type = kCutNode;
           best_move = tt_entry.move;
           result.stats_tt_cut++;
@@ -363,6 +371,7 @@ Score Engine::quiescenceSearch(Score alpha, Score beta, int depth, SearchResult&
       if (tt_entry.node_type == kAllNode) {
         if (tt_entry.score <= alpha) {
           score = tt_entry.score;
+          ASSERT(-kScoreInf < score && score < kScoreInf);
           node_type = kAllNode;
           result.stats_tt_cut++;
           return;
@@ -479,6 +488,7 @@ void Engine::makeMove(const Move& move) {
   } else {
     position.makeMove(move);
   }
+  ASSERT(state < &search_state_stack.back());
   state++;
   state->reset();
 }

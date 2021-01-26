@@ -111,7 +111,7 @@ struct Engine {
   std::function<void(const SearchResult&)> search_result_callback = [](auto){};
 
   SearchState* state = nullptr;
-  array<SearchState, Position::kMaxDepth + 1> search_state_stack;
+  array<SearchState, Position::kMaxDepth + 64> search_state_stack;
 
   Engine() {
     load(kEmbeddedWeightName);
