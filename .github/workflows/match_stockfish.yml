@@ -44,7 +44,7 @@ jobs:
         run: python script.py init --clang && python script.py build --t main
 
       - name: Build stockfish
-        run: make -C thirdparty/Stockfish/src -j build
+        run: make -C thirdparty/Stockfish/src -j build ARCH=x86-64-avx2
 
       - name: === Match ===
         run: >

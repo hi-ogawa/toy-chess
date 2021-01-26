@@ -6,7 +6,7 @@ wget -P misc/match/data https://github.com/official-stockfish/books/raw/master/n
 unzip -d misc/match/data misc/match/data/noob_3moves.epd.zip
 
 # Build stockfish
-make -C thirdparty/Stockfish/src -j build
+make -C thirdparty/Stockfish/src -j build ARCH=x86-64-avx2
 
 # Run cutechess-cli
 bash misc/match/run.sh
