@@ -137,15 +137,11 @@ python src/nn/training/main_move.py \
   --batch-size=$((1 << 13)) \
   --command=train
 
-# Transfer learning to position evaluation network
-python src/nn/training/main.py \
-  --dataset=$LOCAL_DATA_DIR/gensfen.halfkp \
-  --test-dataset=$LOCAL_DATA_DIR/gensfen-test.halfkp \
-  --checkpoint-dir=$DATA_DIR \
-  --checkpoint-embedding=src/nn/data/ckpt-move.pt \
-  --batch-size=$((1 << 13)) \
-  --loss-mode=mse \
-  --command=train
+# Convert model pramaters to binary for c++ runtime
+python src/nn/training/main_move.py \
+  --checkpoint=src/nn/data/ckpt-move.pt \
+  --weight-file=src/nn/data/ckpt-move.bin \
+  --command=process_model_parameters
 ```
 
 

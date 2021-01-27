@@ -38,6 +38,7 @@ namespace precomputation {
     generateInBetweenTable();
     generateNonSlidingAttackTables();
     initializeMagicTables();
+    generateFromToEncoding();
   }
 
   void generateDistanceTable() {
@@ -217,4 +218,18 @@ namespace precomputation {
   Board getRookAttack(Square from, Board occ)   { return getMagicAttack(from, occ, rook_magic_table); }
   Board getQueenAttack(Square from, Board occ)  { return getRookAttack(from, occ) | getBishopAttack(from, occ); }
 
+  //
+  // (from, to) encoding
+  //
+  array2<uint16_t, 64, 64> encode_from_to = {};
+
+  void generateFromToEncoding() {
+    // Enumerate possible (from, to) pairs (Note that castling is king's move, which is included by queen attacks)
+    int id = 0;
+    for (Square from = 0; from < 64; from++) {
+      for (Square to : toSQ(knight_attack_table[from]))      { encode_from_to[from][to] = id++; }
+      for (Square to : toSQ(getQueenAttack(from, Board(0)))) { encode_from_to[from][to] = id++; }
+    }
+    ASSERT(id == kFromToEncodingSize);
+  }
 } // namespace precomputation

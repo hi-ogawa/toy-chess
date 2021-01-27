@@ -199,6 +199,10 @@ struct Linear {
       y[i] = dot<N1>(weight[i], x) + bias[i];
     }
   }
+
+  float forwardOne(int i, float x[N1]) {
+    return dot<N1>(weight[i], x) + bias[i];
+  }
 };
 
 template<int N1, int N2>

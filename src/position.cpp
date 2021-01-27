@@ -31,6 +31,7 @@ void Position::recompute(int level, [[maybe_unused]] bool temporary) {
       }
     }
     if (evaluator) { evaluator->initialize(*this); }
+    if (move_evaluator) { move_evaluator->initialize(*this); }
   }
 
   // init, makeMove, unmakeMove
@@ -271,6 +272,7 @@ void Position::putPiece(Color color, PieceType type, Square sq, bool temporary) 
   piece_on[color][sq] = type;
   state->key ^= Zobrist::piece_squares[color][type][sq];
   if (!temporary && evaluator) { evaluator->putPiece(color, type, sq); }
+  if (!temporary && move_evaluator) { move_evaluator->putPiece(color, type, sq); }
 }
 
 void Position::removePiece(Color color, Square sq, bool temporary) {
@@ -281,6 +283,7 @@ void Position::removePiece(Color color, Square sq, bool temporary) {
   piece_on[color][sq] = kNoPieceType;
   state->key ^= Zobrist::piece_squares[color][type][sq];
   if (!temporary && evaluator) { evaluator->removePiece(color, type, sq); }
+  if (!temporary && move_evaluator) { move_evaluator->removePiece(color, type, sq); }
 }
 
 void Position::movePiece(Color color, Square from, Square to, bool temporary) {
@@ -387,9 +390,8 @@ void Position::makeMove(const Move& move, bool temporary) {
   recompute(1, temporary);
 
   // Reset evaluator on king move
-  if (!temporary && from_type == kKing && evaluator) {
-    evaluator->initialize(*this);
-  }
+  if (!temporary && from_type == kKing && evaluator) { evaluator->initialize(*this); }
+  if (!temporary && from_type == kKing && move_evaluator) { move_evaluator->initialize(*this); }
 }
 
 void Position::unmakeMove(const Move& move, bool temporary) {
@@ -439,9 +441,8 @@ void Position::unmakeMove(const Move& move, bool temporary) {
   recompute(0, temporary);
 
   // Reset evaluator on king move
-  if (!temporary && from_type == kKing && evaluator) {
-    evaluator->initialize(*this);
-  }
+  if (!temporary && from_type == kKing && evaluator) { evaluator->initialize(*this); }
+  if (!temporary && from_type == kKing && move_evaluator) { move_evaluator->initialize(*this); }
 }
 
 void Position::makeNullMove() {

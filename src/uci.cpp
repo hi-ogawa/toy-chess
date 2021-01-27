@@ -30,6 +30,15 @@ UCI::UCI(std::istream& istr, std::ostream& ostr, std::ostream& err_ostr)
 
   // TODO: Not sure how to set "debug on" on cutechess-cli, so here is an easy workaround.
   options.push_back({"Debug", "type check default false", [this](std::istream& line){ engine.debug = (readToken(line) == "true"); }});
+
+  options.push_back({
+    "UseNNMove", "type check default false",
+    [this](std::istream& line){
+      engine.stop();
+      string value = readToken(line);
+      engine.useNNMove(value == "true");
+    }
+  });
 }
 
 int UCI::mainLoop() {

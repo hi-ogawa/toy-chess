@@ -44,18 +44,26 @@ configure_file(src/config.hpp.in ${CMAKE_CURRENT_BINARY_DIR}/config.hpp @ONLY)
 # embedded_weight.cpp
 #
 set(NN_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src/nn)
-set(WEIGHT_FILE ${NN_DIR}/data/default.bin)
-set(WEIGHT_FILE_URL https://github.com/hi-ogawa/toy-chess/releases/download/data/ckpt-2021-01-21-06-25-25.bin)
-if(NOT EXISTS ${WEIGHT_FILE})
-  message("Downloading a weight file from ${WEIGHT_FILE_URL}")
-  file(DOWNLOAD ${WEIGHT_FILE_URL} ${WEIGHT_FILE} SHOW_PROGRESS)
+set(EVAL_WEIGHT_FILE ${NN_DIR}/data/default-eval.bin)
+set(MOVE_WEIGHT_FILE ${NN_DIR}/data/default-move.bin)
+set(EVAL_WEIGHT_FILE_URL https://github.com/hi-ogawa/toy-chess/releases/download/data/ckpt-2021-01-21-06-25-25.bin)
+set(MOVE_WEIGHT_FILE_URL https://github.com/hi-ogawa/toy-chess/releases/download/data/ckpt-move-2021-01-28-12-36-34.bin)
+
+if(NOT EXISTS ${EVAL_WEIGHT_FILE})
+  message("Downloading a eval weight file from ${EVAL_WEIGHT_FILE_URL}")
+  file(DOWNLOAD ${EVAL_WEIGHT_FILE_URL} ${EVAL_WEIGHT_FILE} SHOW_PROGRESS)
+endif()
+
+if(NOT EXISTS ${MOVE_WEIGHT_FILE})
+  message("Downloading a move weight file from ${MOVE_WEIGHT_FILE_URL}")
+  file(DOWNLOAD ${MOVE_WEIGHT_FILE_URL} ${MOVE_WEIGHT_FILE} SHOW_PROGRESS)
 endif()
 
 set(EMBEDDED_WEIGHT_CPP ${CMAKE_CURRENT_BINARY_DIR}/embedded_weight.cpp)
 add_custom_command(
   OUTPUT ${EMBEDDED_WEIGHT_CPP}
-  DEPENDS ${NN_DIR}/embedded_weight.py ${WEIGHT_FILE}
-  COMMAND python ${NN_DIR}/embedded_weight.py ${WEIGHT_FILE} > ${EMBEDDED_WEIGHT_CPP}
+  DEPENDS ${NN_DIR}/embedded_weight.py ${EVAL_WEIGHT_FILE} ${MOVE_WEIGHT_FILE}
+  COMMAND python ${NN_DIR}/embedded_weight.py ${EVAL_WEIGHT_FILE} ${MOVE_WEIGHT_FILE} > ${EMBEDDED_WEIGHT_CPP}
 )
 add_custom_target(generate_embedded_weight DEPENDS ${EMBEDDED_WEIGHT_CPP})
 
@@ -72,6 +80,7 @@ add_library(main_lib
   src/uci.cpp
   src/transposition_table.cpp
   src/nn/evaluator.cpp
+  src/nn/move_evaluator.cpp
   ${EMBEDDED_WEIGHT_CPP}
 )
 target_link_libraries(main_lib PRIVATE pthread) # for std::async
@@ -87,6 +96,7 @@ add_executable(main_test
   src/uci_test.cpp
   src/timeit_test.cpp
   src/nn/evaluator_test.cpp
+  src/nn/move_evaluator_test.cpp
 )
 target_link_libraries(main_test PRIVATE main_lib Catch2WithMain)
 target_precompile_headers(main_test REUSE_FROM main_pch)

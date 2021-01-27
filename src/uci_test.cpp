@@ -85,6 +85,7 @@ TEST_CASE("UCI") {
     "option name Hash type spin default 128 min 1 max 16384",
     "option name WeightFile type string default __EMBEDDED_WEIGHT__",
     "option name Debug type check default false",
+    "option name UseNNMove type check default false",
     "uciok",
   }}) == 1);
 

@@ -7,6 +7,7 @@
 
 #include "../../misc.hpp"
 #include "../../position.hpp"
+#include "../../precomputation.hpp"
 
 void preprocess(const string& infile, const string& outfile, int minply, int maxply, bool shuffle, int buffer_size) {
   std::ifstream istr(infile);
@@ -42,7 +43,7 @@ void preprocess(const string& infile, const string& outfile, int minply, int max
       from = SQ::flipRank(from);
       to = SQ::flipRank(to);
     }
-    *y = from * 64 + to;
+    *y = precomputation::encode_from_to[from][to];
   };
 
   const int kShuffleSeed = 0x12345678;

@@ -74,3 +74,4 @@ enum MoveGenerationType : uint8_t {
 };
 
 using MoveList = SimpleQueue<Move, 256>;
+using NNMoveScoreList = SimpleQueue<std::pair<Move, float>, 256>;

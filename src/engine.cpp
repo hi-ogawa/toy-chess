@@ -50,6 +50,14 @@ void Engine::print(std::ostream& ostr) {
   ostr << position;
   ostr << ":: Evaluation" << "\n";
   ostr << evaluator.evaluate() << "\n";
+  if (position.move_evaluator) {
+    ostr << ":: Move" << "\n";
+    MoveList moves;
+    NNMoveScoreList nn_moves;
+    position.generateMoves(moves);
+    position.assignNNMoveScore(moves, nn_moves);
+    for (auto [move, score] : nn_moves) { ostr << move << ": " << score << "\n"; }
+  }
 }
 
 void Engine::stop() {
@@ -352,7 +360,6 @@ Score Engine::quiescenceSearch(Score alpha, Score beta, int depth, SearchResult&
 
   result.stats_nodes++;
   result.stats_max_depth = std::max(result.stats_max_depth, depth);
-
   if (depth >= Position::kMaxDepth) { return position.evaluate(); }
 
   TTEntry tt_entry;

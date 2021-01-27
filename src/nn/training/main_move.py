@@ -16,7 +16,7 @@ import os
 
 WIDTH1 = 10 * 64 * 64
 WIDTH2 = 128
-WIDTH_OUT = 64 * 64
+WIDTH_OUT = 1792 # Cf. precomputation::kFromToEncodingSize
 EMBEDDING_WIDTH = WIDTH1 + 1
 EMBEDDING_PAD = WIDTH1
 
@@ -197,15 +197,46 @@ def train(dataset_file, test_dataset_file, checkpoint_embedding, ckpt_file, ckpt
       torch.save(ckpt, ckpt_file)
 
 
+def rename_model_parameters(state_dict):
+  return {
+    'l1.weight': state_dict['embedding.weight'][:WIDTH1],
+    'l1.bias':   torch.zeros(WIDTH2),
+    'l2.weight': state_dict['l2.weight'],
+    'l2.bias':   state_dict['l2.bias'],
+  }
+
+
+def process_model_parameters(infile, outfile):
+  print(f":: Loading checkpoint ({infile})")
+  parameters = torch.load(infile, map_location=DEVICE)["model_state_dict"]
+  parameters = rename_model_parameters(parameters)
+  print(f":: Writing weight ({outfile})")
+  with open(outfile, 'wb') as f:
+    for tensor in parameters.values():
+      f.write(bytes(np.array(tensor)))
+
+  # Veryfy size
+  expected = 0
+  expected += (WIDTH1 + 1) * WIDTH2
+  expected += (2 * WIDTH2 + 1) * WIDTH_OUT
+  expected *= 4
+  assert os.stat(outfile).st_size == expected
+
+
 #
 # Main
 #
 
 COMMANDS = [
   "train",
+  "process_model_parameters",
 ]
 
 def main(command, dataset, test_dataset, checkpoint, checkpoint_dir, weight_file, **kwargs):
+  if command == "process_model_parameters":
+    assert checkpoint and weight_file
+    process_model_parameters(infile=checkpoint, outfile=weight_file)
+
   if command == "train":
     train(
       dataset_file=dataset,

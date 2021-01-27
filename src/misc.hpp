@@ -111,6 +111,13 @@ struct Rng {
 };
 
 //
+// (Non-seekable) istream from char array (Cf. https://stackoverflow.com/questions/7781898/get-an-istream-from-a-char)
+//
+struct CharStreambuf : std::streambuf {
+  CharStreambuf(char* ptr, int size) { setg(ptr, ptr, ptr + size); }
+};
+
+//
 // Fixed size queue
 //
 template<class T, size_t N>

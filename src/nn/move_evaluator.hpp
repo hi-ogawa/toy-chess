@@ -1,32 +1,24 @@
 #pragma once
 
 #include "../misc.hpp"
-#include "../evaluation.hpp" // Score
 #include "../position_fwd.hpp"
+#include "../precomputation.hpp"
 #include "utils.hpp"
-#include "embedded_weight.hpp"
+#include "evaluator.hpp"
 
 namespace nn {
 
-// Constants from main.py
-inline constexpr int WIDTH1 = 10 * 64 * 64; // = 40960
-inline constexpr int WIDTH2 = 128;
-inline constexpr int WIDTH3 = 32;
-inline constexpr int WIDTH4 = 32;
+inline constexpr int WIDTH_OUT = precomputation::kFromToEncodingSize;
 
-struct MyModel {
+struct MoveModel {
 
   // NOTE: Allocate on heap since weights are too large for stack
-  std::unique_ptr<InputLayer<WIDTH1, WIDTH2>> l1;
-  std::unique_ptr<Linear<2 * WIDTH2, WIDTH3>> l2;
-  std::unique_ptr<Linear<    WIDTH3, WIDTH4>> l3;
-  std::unique_ptr<Linear<    WIDTH4,      1>> l4;
+  std::unique_ptr<InputLayer<WIDTH1, WIDTH2   >> l1;
+  std::unique_ptr<Linear<2 * WIDTH2, WIDTH_OUT>> l2;
 
-  MyModel() {
+  MoveModel() {
     l1.reset(new decltype(l1)::element_type);
     l2.reset(new decltype(l2)::element_type);
-    l3.reset(new decltype(l3)::element_type);
-    l4.reset(new decltype(l4)::element_type);
   }
 
   void load(const string& filename) {
@@ -40,12 +32,10 @@ struct MyModel {
   void load(std::istream& istr) {
     l1->load(istr);
     l2->load(istr);
-    l3->load(istr);
-    l4->load(istr);
   }
 
   void loadEmbeddedWeight() {
-    CharStreambuf buf(const_cast<char*>(kEmbeddedEvalWeight), kEmbeddedEvalWeightSize);
+    CharStreambuf buf(const_cast<char*>(kEmbeddedMoveWeight), kEmbeddedMoveWeightSize);
     std::istream istr(&buf);
     load(istr);
     istr.peek();
@@ -53,20 +43,16 @@ struct MyModel {
   }
 };
 
-struct Evaluator {
-  MyModel model;
+struct MoveEvaluator {
+  MoveModel model;
   array<Square, 2> kings;
 
-  alignas(kMaxFloatVectorSize) Float accumulator[2][WIDTH2] = {};
-  alignas(kMaxFloatVectorSize) Float tmp2[2 * WIDTH2] = {};
-  alignas(kMaxFloatVectorSize) Float tmp3[WIDTH3] = {};
-  alignas(kMaxFloatVectorSize) Float tmp4[WIDTH4] = {};
-  Float tmp5 = 0;
+  alignas(kMaxFloatVectorSize) float accumulator[2][WIDTH2] = {};
 
   void load(const string& filename) { model.load(filename); }
   void loadEmbeddedWeight() { model.loadEmbeddedWeight(); }
 
-  Score evaluate();
+  float evaluate(Color, Square, Square);
   void initialize(const Position&);
   void update(Color, PieceType, Square, bool);
   void putPiece(Color color, PieceType type, Square to) { update(color, type, to, true); }

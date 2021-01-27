@@ -7,6 +7,8 @@ gensfen-*.halfkp.gz
 ckpt-*.pt
 ckpt-*.bin
 default.bin
+default-eval.bin
+default-move.bin
 *.tsv
 *.pgn
 *.pgn.7z

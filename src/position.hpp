@@ -5,6 +5,7 @@
 #include "precomputation.hpp"
 #include "transposition_table.hpp"
 #include "nn/evaluator.hpp"
+#include "nn/move_evaluator.hpp"
 
 //
 // Position
@@ -47,10 +48,7 @@ struct Position {
   }
 
   // Reset internal stack
-  void reset() {
-    state_stack[0] = *state;
-    state = &state_stack[0];
-  }
+  void reset() { initialize(toFen()); }
 
   void pushState() {
     // TODO:
@@ -123,6 +121,7 @@ struct Position {
   // Evaluation
   //
   nn::Evaluator* evaluator = nullptr;
+  nn::MoveEvaluator* move_evaluator = nullptr;
 
   // Score for side_to_move
   Score evaluate() const {
@@ -137,6 +136,19 @@ struct Position {
   Score evaluateLeaf(int depth) const {
     return state->checkers ? -Evaluation::mateScore(depth) : kScoreDraw;
   };
+
+  void assignNNMoveScore(const MoveList& moves, NNMoveScoreList& nn_moves) {
+    ASSERT(move_evaluator);
+    float sum = 0;
+    for (auto move : moves) {
+      float score = move_evaluator->evaluate(side_to_move, move.from(), move.to());
+      score = std::exp(score);
+      sum += score;
+      nn_moves.put({move, score});
+    }
+    for (auto& [move, score] : nn_moves) { score /= sum; }
+    std::sort(nn_moves.begin(), nn_moves.end(), [](auto x, auto y) { return x.second > y.second; });
+  }
 
   //
   // Static exchange evaluation

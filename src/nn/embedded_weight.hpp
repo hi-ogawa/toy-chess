@@ -1,4 +1,6 @@
 namespace nn {
-  extern const char* kEmbeddedWeight;
-  extern const int kEmbeddedWeightSize;
+  extern const char* kEmbeddedEvalWeight;
+  extern const int   kEmbeddedEvalWeightSize;
+  extern const char* kEmbeddedMoveWeight;
+  extern const int   kEmbeddedMoveWeightSize;
 };

@@ -55,4 +55,11 @@ namespace precomputation {
   Board getRookAttack(Square, Board);
   Board getQueenAttack(Square, Board);
 
+  //
+  // (from, to) encoding
+  //
+  constexpr int kFromToEncodingSize = 1792;
+  extern array2<uint16_t, 64, 64> encode_from_to;
+  void generateFromToEncoding();
+
 } // namespace precomputation

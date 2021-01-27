@@ -1,6 +1,7 @@
 #include "position.hpp"
 #include "transposition_table.hpp"
 #include "nn/evaluator.hpp"
+#include "nn/move_evaluator.hpp"
 
 enum SearchResultType { kSearchResultInfo, kSearchResultBestMove, kNoSearchResult };
 
@@ -92,6 +93,7 @@ struct History {
 struct Engine {
   Position position;
   nn::Evaluator evaluator;
+  nn::MoveEvaluator move_evaluator;
   History history;
   TranspositionTable transposition_table;
 
@@ -116,8 +118,10 @@ struct Engine {
   static inline const string kEmbeddedWeightName = "__EMBEDDED_WEIGHT__";
 
   Engine() {
-    loadWeight();
+    evaluator.loadEmbeddedWeight();
+    move_evaluator.loadEmbeddedWeight();
     position.evaluator = &evaluator;
+    position.move_evaluator = nullptr;
     position.reset();
     setHashSizeMB(kDefaultHashSizeMB);
     state = &search_state_stack[0];
@@ -157,5 +161,13 @@ struct Engine {
   void loadWeight(const string& filename = kEmbeddedWeightName) {
     if (filename == kEmbeddedWeightName) evaluator.loadEmbeddedWeight();
     else evaluator.load(filename);
+  }
+
+  void useNNMove(bool use) {
+    position.move_evaluator = nullptr;
+    if (use) {
+      position.move_evaluator = &move_evaluator;
+      position.reset();
+    }
   }
 };
