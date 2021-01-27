@@ -22,6 +22,9 @@ void preprocess(const string& infile, const string& outfile, int minply, int max
   entries.reserve(buffer_size);
 
   Position pos;
+  nn::Evaluator evaluator;
+  pos.evaluator = &evaluator;
+  pos.evaluator->loadEmbeddedWeight();
 
   auto write_entry = [&](const Move& move) {
     Entry& entry = entries.emplace_back();
@@ -29,7 +32,8 @@ void preprocess(const string& infile, const string& outfile, int minply, int max
 
     uint16_t* x_w = &entry[0];  // [0:31]
     uint16_t* x_b = &entry[31]; // [31:62]
-    uint16_t* y = &entry[62];  // [62:63]
+    uint16_t* y = &entry[62];   // [62:63]
+    uint16_t* z = &entry[63];   // [63:64]
 
     // Position and move are white perspective
     if (pos.side_to_move == kBlack) { std::swap(x_w, x_b); }
@@ -43,6 +47,9 @@ void preprocess(const string& infile, const string& outfile, int minply, int max
       to = SQ::flipRank(to);
     }
     *y = from * 64 + to;
+
+    // Evaluation (already side-to-move corrected)
+    *z = pos.evaluate() - kTempo;
   };
 
   const int kShuffleSeed = 0x12345678;

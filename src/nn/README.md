@@ -130,21 +130,12 @@ shuf src/nn/data/CCRL-4040.[1206633].slim-pgn > src/nn/data/CCRL-4040.[1206633].
 # Convert from .slim-pgn to .halfkp-move (this further shuffles position-move pairs)
 build/Release/nn_preprocess_move --infile src/nn/data/CCRL-4040.[1206633].shuf.slim-pgn
 
-# Training
+# Training (with initializing embedding from evaluation network)
 python src/nn/training/main_move.py \
   --dataset=src/nn/data/CCRL-4040.[1206633].shuf.halfkp-move \
+  --checkpoint-embedding=src/nn/data/ckpt.pt \
   --checkpoint-dir=src/nn/data \
   --batch-size=$((1 << 13)) \
-  --command=train
-
-# Transfer learning to position evaluation network
-python src/nn/training/main.py \
-  --dataset=$LOCAL_DATA_DIR/gensfen.halfkp \
-  --test-dataset=$LOCAL_DATA_DIR/gensfen-test.halfkp \
-  --checkpoint-dir=$DATA_DIR \
-  --checkpoint-embedding=src/nn/data/ckpt-move.pt \
-  --batch-size=$((1 << 13)) \
-  --loss-mode=mse \
   --command=train
 ```
 

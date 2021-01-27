@@ -16,22 +16,33 @@ import os
 
 WIDTH1 = 10 * 64 * 64
 WIDTH2 = 128
-WIDTH_OUT = 64 * 64
 EMBEDDING_WIDTH = WIDTH1 + 1
 EMBEDDING_PAD = WIDTH1
+WIDTH_MOVE1 = 64 * 64
+WIDTH_EVAL1 = 32
+WIDTH_EVAL2 = 32
+WIDTH_EVAL3 = 1
 
 DTYPE = torch.float32
 
 class MyModel(nn.Module):
   def __init__(self):
     super(MyModel, self).__init__()
+    # Embedding HalfKP
     self.embedding = nn.Embedding(EMBEDDING_WIDTH, WIDTH2, padding_idx=EMBEDDING_PAD)
     init_scale = np.sqrt(2 * 3 / WIDTH1) # cf. nn.init.kaiming_uniform_
     nn.init.uniform_(self.embedding.weight, -init_scale, init_scale)
-    self.l2 = nn.Linear(2 * WIDTH2, WIDTH_OUT)
+
+    # Move
+    self.m_l1 = nn.Linear(2 * WIDTH2, WIDTH_MOVE1)
+
+    # Eval
+    self.e_l1 = nn.Linear(2 * WIDTH2, WIDTH_EVAL1)
+    self.e_l2 = nn.Linear(WIDTH_EVAL1, WIDTH_EVAL2)
+    self.e_l3 = nn.Linear(WIDTH_EVAL2, WIDTH_EVAL3)
 
   def load_embedding(self, weight):
-    self.embedding = nn.Embedding.from_pretrained(weight, padding_idx=EMBEDDING_PAD)
+    self.embedding = nn.Embedding.from_pretrained(weight, padding_idx=EMBEDDING_PAD, freeze=False)
 
   def forward(self, x_w, x_b):
     x_w = self.embedding(x_w)
@@ -39,9 +50,16 @@ class MyModel(nn.Module):
     x_w = torch.sum(x_w, dim=-2)
     x_b = torch.sum(x_b, dim=-2)
     x = torch.cat([x_w, x_b], dim=-1)
-    x = F.relu(x)
-    x = self.l2(x)
-    return x
+    y = z = F.relu(x)
+    # Move
+    y = self.m_l1(y)
+    # Eval
+    z = self.e_l1(z)
+    z = F.relu(z)
+    z = self.e_l2(z)
+    z = F.relu(z)
+    z = self.e_l3(z)
+    return y, z
 
 #
 # Metric
@@ -50,18 +68,26 @@ class MyModel(nn.Module):
 class MyMetric:
   def __init__(self):
     self.cnt = 0
-    self.cnt_correct = 0
-    self.x_sum = 0
+    self.cnt_correct_y = 0
+    self.cnt_correct_z = 0
+    self.sum_x = 0
 
-  def update(self, y_model, y_target, x):
+  def update(self, y_model, y_target, z_model, z_target, x):
+    y_model = y_model.detach().cpu()
+    y_target = y_target.detach().cpu()
+    z_model = z_model.detach().cpu()
+    z_target = z_target.detach().cpu()
+    x = x.detach().cpu()
     self.cnt += y_model.shape[0]
-    self.cnt_correct += torch.sum(torch.argmax(y_model, dim=-1) == y_target)
-    self.x_sum += x
+    self.cnt_correct_y += torch.sum(torch.argmax(y_model, dim=-1) == y_target)
+    self.cnt_correct_z += torch.sum((z_model >= 0) == (z_target >= 0))
+    self.sum_x += x
 
   def compute(self):
-    accuracy = self.cnt_correct / self.cnt
-    x_avg = self.x_sum / self.cnt
-    return accuracy, x_avg
+    acc_y = self.cnt_correct_y / self.cnt
+    acc_z = self.cnt_correct_z / self.cnt
+    avg_x = self.sum_x / self.cnt
+    return acc_y, acc_z, avg_x
 
 
 #
@@ -89,11 +115,13 @@ class MyBatchDataset(torch.utils.data.Dataset):
     x_w = data[:, :31]
     x_b = data[:, 31:62]
     y = data[:, 62]
+    z = data[:, 63].astype(np.int16).astype(np.float32).reshape([-1, 1]) / 100
     # Convert to torch tensor (NOTE: uint16 is not supported by pytorch)
     x_w = torch.tensor(x_w.astype(np.long))
     x_b = torch.tensor(x_b.astype(np.long))
     y = torch.tensor(y.astype(np.long))
-    return x_w, x_b, y
+    z = torch.tensor(z)
+    return x_w, x_b, y, z
 
   def __len__(self):
     return (self.size + self.batch_size - 1) // self.batch_size
@@ -106,8 +134,8 @@ DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 MODEL_INIT_SEED = 0x12345678
 
-def my_loss_func(y_model, y_target):
-  return torch.nn.functional.cross_entropy(y_model, y_target)
+def my_loss_func(y_model, y_target, z_model, z_target):
+  return F.cross_entropy(y_model, y_target) + F.mse_loss(z_model, z_target)
 
 
 def train(dataset_file, test_dataset_file, checkpoint_embedding, ckpt_file, ckpt_dir, num_epochs, batch_size, num_workers, weight_decay, learning_rate, scheduler_patience):
@@ -154,16 +182,16 @@ def train(dataset_file, test_dataset_file, checkpoint_embedding, ckpt_file, ckpt
     with tqdm(train_loader) as progressbar:
       for batch_sample in progressbar:
         optimizer.zero_grad()
-        x_w, x_b, y_target = [t.to(DEVICE) for t in batch_sample]
-        y_model = model(x_w, x_b)
-        loss = my_loss_func(y_model, y_target)
+        x_w, x_b, y_target, z_target = [t.to(DEVICE) for t in batch_sample]
+        y_model, z_model = model(x_w, x_b)
+        loss = my_loss_func(y_model, y_target, z_model, z_target)
         loss.backward()
         optimizer.step()
-        metric.update(y_model.detach().cpu(), y_target.detach().cpu(), loss.detach().cpu() * y_model.shape[0])
-        acc_run, loss_run = metric.compute()
-        progressbar.set_postfix(loss=float(loss), loss_run=float(loss_run), acc_run=float(acc_run))
+        metric.update(y_model, y_target, z_model, z_target, loss * y_model.shape[0])
+        acc_y_run, acc_z_run, loss_run = metric.compute()
+        progressbar.set_postfix(loss=float(loss), loss_run=float(loss_run), acc_y_run=float(acc_y_run), acc_z_run=float(acc_z_run))
         del x_w, x_b, y_target, y_model
-    train_acc, train_loss = metric.compute()
+    train_acc, _, train_loss = metric.compute()
 
     test_acc = 0
     test_loss = 0
@@ -174,14 +202,14 @@ def train(dataset_file, test_dataset_file, checkpoint_embedding, ckpt_file, ckpt
       metric = MyMetric()
       model.eval()
       for batch_sample in tqdm(test_loader):
-        x_w, x_b, y_target = [t.to(DEVICE) for t in batch_sample]
-        y_model = model(x_w, x_b)
-        loss = my_loss_func(y_model, y_target, loss_mode)
-        metric.update(y_model.detach().cpu(), y_target.detach().cpu(), loss.detach().cpu() * y_model.shape[0])
-        acc_run, loss_run = metric.compute()
-        progressbar.set_postfix(loss=float(loss), loss_run=float(loss_run), acc_run=float(acc_run))
+        x_w, x_b, y_target, z_target = [t.to(DEVICE) for t in batch_sample]
+        y_model, z_model = model(x_w, x_b)
+        loss = my_loss_func(y_model, y_target, z_model, z_target)
+        metric.update(y_model, y_target, z_model, z_target, loss * y_model.shape[0])
+        acc_y_run, acc_z_run, loss_run = metric.compute()
+        progressbar.set_postfix(loss=float(loss), loss_run=float(loss_run), acc_y_run=float(acc_y_run), acc_z_run=float(acc_z_run))
         del x_w, x_b, y_target, y_model
-      test_acc, test_loss = metric.compute()
+      test_acc, _, test_loss = metric.compute()
       scheduler.step(test_loss)
 
     if ckpt_dir is not None:
