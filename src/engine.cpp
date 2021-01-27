@@ -125,6 +125,7 @@ void Engine::goImpl() {
     // Debug info
     SearchResult res_info;
     res_info.type = kSearchResultInfo;
+    res_info.debug += "aspiration = " + toString(res.stats_aspiration) + ", ";
     res_info.debug += "tt_hit = " + toString(res.stats_tt_hit) + ", ";
     res_info.debug += "tt_cut = " + toString(res.stats_tt_cut) + ", ";
     res_info.debug += "futility_prune = " + toString(res.stats_futility_prune) + ", ";
@@ -147,7 +148,7 @@ SearchResult Engine::searchWithAspirationWindow(int depth, Score init_target) {
   int32_t kInf = kScoreInf;
   int32_t alpha, beta;
 
-  while (true) {
+  for (int i = 0; ; i++) {
     alpha = std::max(target - delta, -kInf);
     beta = std::min(target + delta, kInf);
 
@@ -162,6 +163,7 @@ SearchResult Engine::searchWithAspirationWindow(int depth, Score init_target) {
       res.score = score;
       res.pv = state->pv;
       res.stats_time = time_control.getTime() + 1;
+      res.stats_aspiration = i;
       return res;
     }
 
@@ -173,7 +175,7 @@ SearchResult Engine::searchWithAspirationWindow(int depth, Score init_target) {
     // Extend high
     // <--t-->
     // <-----t----->
-    if (beta <= alpha) { target += delta; }
+    if (beta <= score) { target += delta; }
 
     delta *= 2;
   }

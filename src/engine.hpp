@@ -15,6 +15,7 @@ struct SearchResult {
   int64_t stats_futility_prune = 0;
   int64_t stats_lmr = 0;
   int64_t stats_lmr_success = 0;
+  int64_t stats_aspiration = -1;
   MoveList pv;
   string debug;
 
