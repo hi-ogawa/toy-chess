@@ -53,7 +53,6 @@ void Engine::print(std::ostream& ostr) {
 
 void Engine::stop() {
   if (!isRunning()) { return; }
-  // TODO: This assertion fails even though it seems impossible...
   ASSERT(!stop_requested.load(std::memory_order_acquire));
   stop_requested.store(true, std::memory_order_release);
   wait();
@@ -64,7 +63,6 @@ void Engine::stop() {
 void Engine::wait() {
   ASSERT(go_thread_future.valid()); // Check Engine::go didn't meet with Engine::wait yet
   go_thread_future.wait();
-  // TODO: Segmentation fault in "future::get"???
   ASSERT(go_thread_future.get()); // "get" will invalidate "future"
   ASSERT(!go_thread_future.valid());
 }
@@ -78,6 +76,7 @@ bool Engine::checkSearchLimit() {
 void Engine::go(bool blocking) {
   ASSERT(!go_thread_future.valid()); // Check previous Engine::go met with Engine::wait
   go_thread_future = std::async([this]() { goImpl(); return true; });
+  ASSERT(go_thread_future.valid());
   if (blocking) { wait(); }
 }
 
@@ -125,6 +124,7 @@ void Engine::goImpl() {
     // Debug info
     SearchResult res_info;
     res_info.type = kSearchResultInfo;
+    res_info.debug += "max_depth = " + toString(res.stats_max_depth) + ", ";
     res_info.debug += "aspiration = " + toString(res.stats_aspiration) + ", ";
     res_info.debug += "tt_hit = " + toString(res.stats_tt_hit) + ", ";
     res_info.debug += "tt_cut = " + toString(res.stats_tt_cut) + ", ";
@@ -200,9 +200,11 @@ Score Engine::searchImpl(Score alpha, Score beta, int depth, int depth_end, Sear
   if (depth >= depth_end) { return quiescenceSearch(alpha, beta, depth, result); }
 
   result.stats_nodes++;
+  result.stats_max_depth = std::max(result.stats_max_depth, depth);
 
   TTEntry tt_entry;
   bool tt_hit = transposition_table.get(position.state->key, tt_entry);
+  tt_hit = tt_hit && position.isPseudoLegal(tt_entry.move) && position.isLegal(tt_entry.move);
   result.stats_tt_hit += tt_hit;
 
   Move best_move = kNoneMove;
@@ -336,13 +338,16 @@ Score Engine::quiescenceSearch(Score alpha, Score beta, int depth, SearchResult&
   if (!checkSearchLimit()) { return kScoreNone; }
 
   // TODO:
-  //   When both sides are picking tt_move, it can quicly go into infinite recursion.
+  //   When both sides are picking tt_move, it can quickly go into infinite recursion.
 
   result.stats_nodes++;
+  result.stats_max_depth = std::max(result.stats_max_depth, depth);
+
   if (depth >= Position::kMaxDepth) { return position.evaluate(); }
 
   TTEntry tt_entry;
   bool tt_hit = transposition_table.get(position.state->key, tt_entry);
+  tt_hit = tt_hit && position.isPseudoLegal(tt_entry.move) && position.isLegal(tt_entry.move);
   result.stats_tt_hit += tt_hit;
 
   Move best_move = kNoneMove;

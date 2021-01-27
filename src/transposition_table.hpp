@@ -57,7 +57,6 @@ struct TranspositionTable {
 
   bool get(uint64_t key, Entry& entry) {
     uint64_t index = key % size;
-    ASSERT(index < size);
     entry = data[index];
     return entry.upper_key == toUpperKey(key);
   }

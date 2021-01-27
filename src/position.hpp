@@ -136,7 +136,7 @@ struct Position {
   // Static exchange evaluation
   //
   Score evaluateMove(const Move&);
-  Score computeSEE(Square);
+  Score computeSEE(Square, int);
   Move getLVA(Color, Square) const; // Least valuable attacker
 
   bool isCaptureOrPromotion(const Move&);

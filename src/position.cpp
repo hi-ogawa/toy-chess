@@ -762,12 +762,14 @@ Score Position::evaluateMove(const Move& move) {
   if (victim == kNoPieceType) { return 0; }
 
   makeMove(move, /* temporary */ true);
-  Score score = kPieceValue[victim] - computeSEE(move.to());
+  Score score = kPieceValue[victim] - computeSEE(move.to(), 0);
   unmakeMove(move, /* temporary */ true);
   return score;
 }
 
-Score Position::computeSEE(Square to) {
+Score Position::computeSEE(Square to, int depth) {
+  // if (depth >= 0) { return 0; }
+
   // Capture by least valuable attacker
   Move move = getLVA(side_to_move, to);
   if (!move) { return 0; }
@@ -778,7 +780,7 @@ Score Position::computeSEE(Square to) {
   ASSERT(attackee != kNoPieceType);
   ASSERT(attackee != kKing);
   makeMove(move, /* temporary */ true);
-  Score score = std::max<Score>(0, kPieceValue[attackee] - computeSEE(to));
+  Score score = std::max<Score>(0, kPieceValue[attackee] - computeSEE(to, depth + 1));
   unmakeMove(move, /* temporary */ true);
   return score;
 }

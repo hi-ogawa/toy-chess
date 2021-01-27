@@ -15,7 +15,8 @@ struct SearchResult {
   int64_t stats_futility_prune = 0;
   int64_t stats_lmr = 0;
   int64_t stats_lmr_success = 0;
-  int64_t stats_aspiration = -1;
+  int stats_aspiration = -1;
+  int stats_max_depth = 0;
   MoveList pv;
   string debug;
 
@@ -109,7 +110,7 @@ struct Engine {
 
   // Result for each depth during iterative deepening
   vector<SearchResult> results;
-  std::function<void(const SearchResult&)> search_result_callback = [](auto){};
+  std::function<void(const SearchResult&)> search_result_callback = [](const SearchResult&){};
 
   SearchState* state = nullptr;
   array<SearchState, Position::kMaxDepth + 64> search_state_stack;

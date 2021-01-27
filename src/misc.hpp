@@ -35,14 +35,14 @@ string toString(const T& v) {
 // Assertion
 //
 
-// Always on
+// Assertion always on
 #define ASSERT(EXPR) \
   if(!static_cast<bool>(EXPR)) { \
     std::fprintf(stderr, "[%s:%d] ASSERT EXPR = (%s)\n", __FILE__, __LINE__, #EXPR); \
     std::abort(); \
   }
 
-// Disabled on Release build
+// Assertion disabled on "Release" build
 #ifdef NDEBUG
   #define ASSERT_HOT(EXPR)
 #else

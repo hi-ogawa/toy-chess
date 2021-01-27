@@ -6,9 +6,13 @@ add_compile_options(-Wall -Wextra -Wshadow)
 
 # Sanitizer
 if(CMAKE_BUILD_TYPE MATCHES Debug)
-  add_compile_options(-fsanitize=address -fsanitize=undefined)
-  add_link_options(-fsanitize=address -fsanitize=undefined)
+  set(DEFAULT_SANITIZERS "-fsanitize=address -fsanitize=undefined")
+else()
+  set(DEFAULT_SANITIZERS "")
 endif()
+set(SANITIZERS "${DEFAULT_SANITIZERS}" CACHE STRING "Sanitizer options")
+add_compile_options("SHELL: ${SANITIZERS}")
+add_link_options("SHELL: ${SANITIZERS}")
 
 # SIMD
 option(USE_SSE "Use SSE" OFF)
