@@ -82,7 +82,8 @@ TEST_CASE("UCI") {
   CHECK(tester.putAndCheck("uci", {{
     "name toy-chess",
     "author hiro18181",
-    "option name WeightFile type string default <embedded-weight>",
+    "option name Hash type spin default 16 min 1 max 16384",
+    "option name WeightFile type string default __EMBEDDED_WEIGHT__",
     "uciok",
   }}) == 1);
 

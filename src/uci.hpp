@@ -16,10 +16,17 @@ struct Event {
   Event(const SearchResult& arg) : type{kSearchResultEvent}, search_result{arg} {}
 };
 
+struct UCIOption {
+  string id;     // e.g. Hash
+  string detail; // e.g. type spin default 16 min 1 max 16384
+  std::function<void(std::istream&)> handler;
+};
+
 struct UCI {
   std::istream& istr;
   std::ostream& ostr;
   std::ostream& err_ostr;
+  vector<UCIOption> options;
 
   Queue<Event> queue; // single consumer and two producers
   std::future<bool> command_listener_thread_future;
@@ -44,11 +51,11 @@ struct UCI {
     return res;
   }
 
-  template<class T>
-  void print(const T& v) { ostr << v << std::endl; }
+  template<class ...Ts>
+  void print(Ts ...args) { ::_print(ostr, " ", "", args...); ostr << std::endl; }
 
-  template<class T>
-  void printError(const T& v) { err_ostr << "ERROR: " << v << std::endl; }
+  template<class ...Ts>
+  void printError(Ts ...args) { print("info string ERROR", args...); }
 
   //
   // UCI commands
@@ -57,12 +64,14 @@ struct UCI {
   void uci_uci(std::istream&) {
     print("name toy-chess");
     print("author hiro18181");
-    print("option name WeightFile type string default " + Engine::kEmbeddedWeightName);
+    for (auto& option : options) { print("option name", option.id, option.detail); }
     print("uciok");
   }
 
-  void uci_debug(std::istream&) {
-    printError("Unsupported command [debug]");
+  void uci_debug(std::istream& command) {
+    auto value = readToken(command);
+    ASSERT(value == "on" || value == "off");
+    engine.debug = (value == "on");
   }
 
   void uci_isready(std::istream&) {
@@ -75,9 +84,10 @@ struct UCI {
     ASSERT(readToken(command) == "name");
     auto id = readToken(command);
     ASSERT(readToken(command) == "value");
-    auto value = readToken(command);
-    if (id == "WeightFile") { engine.load(value); return; }
-    printError("Unsupported command [setoption name " + id + " ...]");
+    for (auto& option : options) {
+      if (option.id == id) { option.handler(command); return; }
+    }
+    printError("Unsupported option [" + id + "]");
   }
 
   void uci_register(std::istream&) {

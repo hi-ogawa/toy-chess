@@ -7,6 +7,26 @@ UCI::UCI(std::istream& istr, std::ostream& ostr, std::ostream& err_ostr)
   engine.search_result_callback = [this](const SearchResult& search_result) {
     queue.put(Event(search_result));
   };
+
+  // Setup UCI options
+  options.push_back({
+    "Hash", toString("type spin default", Engine::kDefaultHashSizeMB, "min 1 max 16384"),
+    [this](std::istream& line){
+      engine.stop();
+      int value = std::stoi(readToken(line));
+      ASSERT(1 <= value && value <= 16384);
+      engine.setHashSizeMB(value);
+    }
+  });
+
+  options.push_back({
+    "WeightFile", toString("type string default", Engine::kEmbeddedWeightName),
+    [this](std::istream& line){
+      engine.stop();
+      string value = readToken(line);
+      engine.loadWeight(value);
+    }
+  });
 }
 
 int UCI::mainLoop() {
@@ -102,7 +122,7 @@ void UCI::uci_position(std::istream& command) {
   if (token != "moves") { printError("Invalid position command"); return; }
 
   // In order to distinguish move types (e.g. castling/enpassant), we need full move generation.
-  // TODO: To detect 3-folds repetition, we need to keep last six moves
+  // TODO: To detect 3-folds repetition, we need to keep some moves on stack
   for (int i = 0; ; i++) {
     // Reset when reaching stack limit
     if (i == Position::kMaxDepth) { engine.position.reset(); i = 0; }

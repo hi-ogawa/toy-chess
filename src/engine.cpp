@@ -24,23 +24,24 @@ void TimeControl::initialize(const GoParameters& go, Color own, int ply) {
 void SearchResult::print(std::ostream& ostr) const {
   if (type == kSearchResultInfo) {
     if (!debug.empty()) {
-      ostr << "info string " << debug;
+      ostr << toString("info string DEBUG", debug);
 
     } else {
-      int64_t nps = (1000 * stats_nodes) / stats_time;
-      ostr << "info"
-           << " depth " << depth
-           << " score cp " << score
-           << " time " << stats_time
-           << " nodes " << stats_nodes
-           << " nps " << nps
-           << " pv";
+      ostr << toString(
+        "info depth", depth,
+        "score cp", score,
+        "time", stats_time,
+        "nodes", stats_nodes,
+        "nps", (1000 * stats_nodes) / stats_time,
+        "pv"
+      );
       for (auto move : pv) { ostr << " " << move; }
     }
   }
 
   if (type == kSearchResultBestMove) {
-    ostr << "bestmove " << pv.data[0];
+    ASSERT(pv.size() > 0);
+    ostr << toString("bestmove", pv.data[0]);
   }
 }
 
@@ -83,14 +84,17 @@ void Engine::go(bool blocking) {
 void Engine::goImpl() {
   time_control.initialize(go_parameters, position.side_to_move, position.game_ply);
 
-  // Debug info
-  SearchResult info;
-  info.type = kSearchResultInfo;
-  info.debug += "ply = " + toString(position.game_ply) + ", ";
-  info.debug += "side = " + toString(position.side_to_move) + ", ";
-  info.debug += "eval = " + toString(position.evaluate()) + ", ";
-  info.debug += "time = " + toString(time_control.getDuration());
-  search_result_callback(info);
+  if (debug) {
+    SearchResult info;
+    info.type = kSearchResultInfo;
+    info.debug = toString(
+      "ply", position.game_ply,
+      "side", position.side_to_move,
+      "eval", position.evaluate(),
+      "time_limit", time_control.getDuration()
+    );
+    search_result_callback(info);
+  }
 
   int depth_end = go_parameters.depth;
   ASSERT(depth_end > 0);
@@ -122,15 +126,19 @@ void Engine::goImpl() {
     search_result_callback(results[depth]);
 
     // Debug info
-    SearchResult res_info;
-    res_info.type = kSearchResultInfo;
-    res_info.debug += "max_depth = " + toString(res.stats_max_depth) + ", ";
-    res_info.debug += "aspiration = " + toString(res.stats_aspiration) + ", ";
-    res_info.debug += "tt_hit = " + toString(res.stats_tt_hit) + ", ";
-    res_info.debug += "tt_cut = " + toString(res.stats_tt_cut) + ", ";
-    res_info.debug += "futility_prune = " + toString(res.stats_futility_prune) + ", ";
-    res_info.debug += "lmr = " + toString(res.stats_lmr_success) + "/" + toString(res.stats_lmr);
-    search_result_callback(res_info);
+    if (debug) {
+      SearchResult res_info;
+      res_info.type = kSearchResultInfo;
+      res_info.debug = toString(
+        "max_depth", res.stats_max_depth,
+        "aspiration", res.stats_aspiration,
+        "tt_hit", res.stats_tt_hit,
+        "tt_cut", res.stats_tt_cut,
+        "futility_prun", res.stats_futility_prune,
+        "lmr", toString(res.stats_lmr_success) +  "/" + toString(res.stats_lmr)
+      );
+      search_result_callback(res_info);
+    }
   }
 
   // Send "bestmove ..."

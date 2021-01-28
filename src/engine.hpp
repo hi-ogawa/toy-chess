@@ -90,18 +90,14 @@ struct History {
 
 struct Engine {
   Position position;
-
-  static inline const string kEmbeddedWeightName = "<embedded-weight>";
   nn::Evaluator evaluator;
-
   History history;
-
-  static inline const size_t kDefaultTableSizeMB = 64;
   TranspositionTable transposition_table;
 
   GoParameters go_parameters = {};
   TimeControl time_control = {};
 
+  std::atomic<bool> debug = 0;
   std::atomic<bool> stop_requested = 0; // single reader ("go" thread) + single writer ("stop" thread)
 
   // Engine::wait invalidates future for the next Engine::go
@@ -115,11 +111,14 @@ struct Engine {
   SearchState* state = nullptr;
   array<SearchState, Position::kMaxDepth + 64> search_state_stack;
 
+  static inline const int kDefaultHashSizeMB = 16;
+  static inline const string kEmbeddedWeightName = "__EMBEDDED_WEIGHT__";
+
   Engine() {
-    load(kEmbeddedWeightName);
+    loadWeight();
     position.evaluator = &evaluator;
     position.reset();
-    transposition_table.resizeMB(kDefaultTableSizeMB);
+    setHashSizeMB(kDefaultHashSizeMB);
     state = &search_state_stack[0];
   }
 
@@ -152,11 +151,10 @@ struct Engine {
   // Misc
   void print(std::ostream& ostr = std::cerr);
 
-  void load(const string& filename) {
-    if (filename == kEmbeddedWeightName) {
-      evaluator.loadEmbeddedWeight();
-    } else {
-      evaluator.load(filename);
-    }
+  void setHashSizeMB(int mb) { transposition_table.resize(mb); }
+
+  void loadWeight(const string& filename = kEmbeddedWeightName) {
+    if (filename == kEmbeddedWeightName) evaluator.loadEmbeddedWeight();
+    else evaluator.load(filename);
   }
 };

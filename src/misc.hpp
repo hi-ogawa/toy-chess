@@ -24,10 +24,26 @@ ostream& operator<<(ostream& o, const T& x) { o << "{"; auto s = ""; for (auto& 
 #define dbg(...) do { std::cerr << #__VA_ARGS__ ": " << std::make_tuple(__VA_ARGS__) << std::endl; } while (0)
 #define dbg2(X) do { std::cerr << #X ":\n"; for (auto& __Y : X) { std::cerr << __Y << std::endl; } } while (0)
 
-template<class T>
-string toString(const T& v) {
+//
+// Python-like print
+//
+
+template<class ...Ts>
+void _print(std::ostream& ostr, const string& sep, const string& end, Ts... args) {
+  string s = "";
+  ((ostr << s << args, s = sep), ...);
+  ostr << end;
+}
+
+template<class ...Ts>
+void print(Ts... args) {
+  _print(std::cout, " ", "\n", args...);
+}
+
+template<class ...Ts>
+string toString(Ts... args) {
   std::ostringstream ostr;
-  ostr << v;
+  _print(ostr, " ", "", args...);
   return ostr.str();
 }
 
@@ -104,9 +120,9 @@ struct SimpleQueue {
 
   T& get() { ASSERT_HOT(first < last); return data[first++]; }
   void put(const T& x) { ASSERT_HOT(last < N); data[last++] = x; }
-  bool empty() { return first == last; }
   void clear() { first = last = 0; }
-  size_t size() { return last - first; }
+  bool empty() const { return first == last; }
+  size_t size() const { return last - first; }
 
   T* begin() { return &data[first]; }
   T* end() { return &data[last]; }
