@@ -27,6 +27,9 @@ UCI::UCI(std::istream& istr, std::ostream& ostr, std::ostream& err_ostr)
       engine.loadWeight(value);
     }
   });
+
+  // TODO: Not sure how to set "debug on" on cutechess-cli, so here is an easy workaround.
+  options.push_back({"Debug", "type check default false", [this](std::istream& line){ engine.debug = (readToken(line) == "true"); }});
 }
 
 int UCI::mainLoop() {

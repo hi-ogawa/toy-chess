@@ -57,7 +57,7 @@ jobs:
           TC=${{ github.event.inputs.time_control }}
           CONCURRENCY=${{ github.event.inputs.concurrency }}
           ROUNDS=${{ github.event.inputs.rounds }}
-          ENGINE2="name=toy-chess-${{ github.event.inputs.version }} cmd=build/version/build/Release/main"
+          ENGINE2="name=toy-chess-${{ github.event.inputs.version }} cmd=build/version/build/Release/main option.Debug=true"
           bash misc/match/run.sh
 
       - uses: actions/upload-artifact@v2
