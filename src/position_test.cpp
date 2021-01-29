@@ -122,3 +122,15 @@ TEST_CASE("Position::evaluateMove") {
   Score expected = kPieceValue[kKnight] - kPieceValue[kPawn] + kPieceValue[kBishop] - kPieceValue[kBishop];
   CHECK(acutal == expected);
 }
+
+TEST_CASE("Position::isRepetition") {
+  auto fen = "1k6/4R3/5R2/8/8/6P1/5PP1/3q2K1 w - - 0 1";
+  Position pos(fen);
+
+  pos.makeMove(Move(kG1, kH2));
+  pos.makeMove(Move(kD1, kH5));
+  CHECK(pos.isRepetition() == false);
+  pos.makeMove(Move(kH2, kG1));
+  pos.makeMove(Move(kH5, kD1));
+  CHECK(pos.isRepetition() == true);
+}

@@ -472,6 +472,20 @@ void Position::unmakeNullMove() {
   recompute(1);
 }
 
+bool Position::isDraw() const {
+  // TODO: This ignores checkmate at 100th move
+  return state->rule50 >= 100 || isRepetition();
+}
+
+bool Position::isRepetition() const {
+  // NOTE: False positive on key collision
+  for (int i = 2; ; i += 2) {
+    if (i > state->rule50) { break;}
+    if (state - i < &state_stack[0]) { break; }
+    if (state->key == (state - i)->key) { return true; }
+  }
+  return false;
+}
 
 //
 // Move generation

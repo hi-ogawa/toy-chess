@@ -85,6 +85,8 @@ struct Position {
   bool isPinned(Color, Square, Square, Square, Board) const;
   array<Board, 2> getPawnPush(Color) const;
   array<Board, 2> getPawnCapture(Color) const;
+  bool isDraw() const;
+  bool isRepetition() const;
 
   //
   // Make/Unmake move

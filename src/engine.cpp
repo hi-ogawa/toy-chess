@@ -205,6 +205,8 @@ SearchResult Engine::search(int depth) {
 
 Score Engine::searchImpl(Score alpha, Score beta, int depth, int depth_end, SearchResult& result) {
   if (!checkSearchLimit()) { return kScoreNone; }
+  if (position.isDraw()) { return kScoreDraw; }
+  if (depth >= Position::kMaxDepth) { return position.evaluate(); }
   if (depth >= depth_end) { return quiescenceSearch(alpha, beta, depth, result); }
 
   result.stats_nodes++;
@@ -344,9 +346,7 @@ Score Engine::searchImpl(Score alpha, Score beta, int depth, int depth_end, Sear
 
 Score Engine::quiescenceSearch(Score alpha, Score beta, int depth, SearchResult& result) {
   if (!checkSearchLimit()) { return kScoreNone; }
-
-  // TODO:
-  //   When both sides are picking tt_move, it can quickly go into infinite recursion.
+  if (position.isDraw()) { return kScoreDraw; }
 
   result.stats_nodes++;
   result.stats_max_depth = std::max(result.stats_max_depth, depth);
