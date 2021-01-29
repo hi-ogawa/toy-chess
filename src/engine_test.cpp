@@ -17,7 +17,7 @@ TEST_CASE("Engine::go") {
   if (kBuildType == "Release") {
     fen = kFenMateIn3;
     depth = 6;
-    expected = "{g4g6, c6b7, h5h7, b7a8, g6g8}";
+    expected = "{g4g6, c6b7, h5h7, b7b8, g6g8}";
   } else {
     fen = kFenMateIn2;
     depth = 4;

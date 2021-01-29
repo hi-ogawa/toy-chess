@@ -134,3 +134,12 @@ TEST_CASE("Position::isRepetition") {
   pos.makeMove(Move(kH5, kD1));
   CHECK(pos.isRepetition() == true);
 }
+
+TEST_CASE("Position::generateQuietChecks") {
+  auto fen = "8/8/2k5/7R/6R1/4K3/8/8 w - - 0 1"; // Two rooks mate in 3
+  Position pos(fen);
+
+  MoveList ls;
+  pos.generateQuietChecks(ls);
+  CHECK(toString(ls) == "{g4c4, g4g6, h5c5, h5h6}");
+}

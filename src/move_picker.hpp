@@ -158,11 +158,20 @@ struct MovePicker {
 
     if (stage == kQuiescenceCaptureStage) {
       while (!good_captures.empty()) { res_move = good_captures.get().first; return true; }
+
       stage = kQuiescenceCheckStage;
+      position.generateQuietChecks(tmp_list);
+      for (auto move : tmp_list) {
+        if (move != tt_move && position.isLegal(move)) {
+          auto score = history.getQuietScore(position, move);
+          good_captures.put({move, score});
+        }
+      }
+      sortMoveScoreList(good_captures);
     }
 
     if (stage == kQuiescenceCheckStage) {
-      // TODO
+      while (!good_captures.empty()) { res_move = good_captures.get().first; return true; }
       stage = kQuiescenceEndStage;
     }
 

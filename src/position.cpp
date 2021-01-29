@@ -561,6 +561,49 @@ void Position::generateMoves(MoveList& move_list, MoveGenerationType movegen_typ
   }
 }
 
+void Position::generateQuietChecks(MoveList& move_list) const {
+  Color own = side_to_move;
+  Board occ = occupancy[kBoth];
+  Square opp_king_sq = kingSQ(!own);
+
+  // NBRQ
+  auto generate_quiet_checks = [&](Board b_from, auto func_generate_to) {
+    Board qc_target = func_generate_to(opp_king_sq) & ~occ;
+    for (auto from : toSQ(b_from)) {
+      Board b_to = func_generate_to(from);
+      for (auto to : toSQ(b_to & qc_target)) { move_list.put(Move(from, to)); }
+    }
+  };
+  generate_quiet_checks(pieces[own][kKnight], [&](Square from) { return knight_attack_table[from]; });
+  generate_quiet_checks(pieces[own][kBishop], [&](Square from) { return getBishopAttack(from, occ); });
+  generate_quiet_checks(pieces[own][kRook  ], [&](Square from) { return getRookAttack(from, occ); });
+  generate_quiet_checks(pieces[own][kQueen ], [&](Square from) { return getQueenAttack(from, occ); });
+
+  // Castling
+  for (auto side : {kOO, kOOO}) {
+    if (!state->castling_rights[own][side]) { continue; }
+    auto [king_from, king_to, rook_from, rook_to] = kCastlingMoves[own][side];
+    if (in_between_table[king_from][rook_from] & occ) { continue; }
+    if (toBB(opp_king_sq) & getRookAttack(rook_to, occ)) {
+      move_list.put(Move(king_from, king_to, kCastling));
+    }
+  }
+
+  // Pawn
+  {
+    auto [push1, push2] = getPawnPush(own);
+    Board qc_target = pawn_attack_table[!own][opp_king_sq];
+    for (auto to : toSQ(push1 & qc_target)) {
+      auto from = to - kPawnPushDirs[own];
+      move_list.put(Move(from, to));
+    }
+    for (auto to : toSQ(push2 & qc_target)) {
+      auto from = to - 2 * kPawnPushDirs[own];
+      move_list.put(Move(from, to));
+    }
+  }
+}
+
 void Position::generatePawnPushMoves(MoveList& move_list, Color own, Board target, MoveGenerationType movegen_type) const {
   auto [push1, push2] = getPawnPush(own);
   push1 &= target;

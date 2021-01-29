@@ -413,10 +413,9 @@ Score Engine::quiescenceSearch(Score alpha, Score beta, int depth, SearchResult&
       move_cnt++;
 
       bool is_capture = position.isCaptureOrPromotion(move);
-      bool gives_check = position.givesCheck(move);
 
       // Futility pruning
-      if (!in_check && !gives_check) {
+      if (!in_check) {
         Score history_score = is_capture ? history.getCaptureScore(position, move) : history.getQuietScore(position, move);
         Score see_score = position.evaluateMove(move);
         if (evaluation + 100 < alpha && (history_score < -10 || see_score < -100)) {
