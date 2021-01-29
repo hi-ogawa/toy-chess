@@ -12,6 +12,7 @@ struct SearchResult {
   int64_t stats_nodes = 0;
   int64_t stats_tt_hit = 0;
   int64_t stats_tt_cut = 0;
+  int64_t stats_refutation = 0;
   int64_t stats_futility_prune = 0;
   int64_t stats_lmr = 0;
   int64_t stats_lmr_success = 0;

@@ -134,7 +134,8 @@ void Engine::goImpl() {
         "aspiration", res.stats_aspiration,
         "tt_hit", res.stats_tt_hit,
         "tt_cut", res.stats_tt_cut,
-        "futility_prun", res.stats_futility_prune,
+        "refutation", res.stats_refutation,
+        "futility_prune", res.stats_futility_prune,
         "lmr", toString(res.stats_lmr_success) +  "/" + toString(res.stats_lmr)
       );
       search_result_callback(res_info);
@@ -308,6 +309,7 @@ Score Engine::searchImpl(Score alpha, Score beta, int depth, int depth_end, Sear
       if (beta <= score) { // beta cut
         node_type = kCutNode;
         best_move = move;
+        result.stats_refutation += (move_picker.stage == kRefutationStage);
         return;
       }
       if (alpha < score) { // pv
