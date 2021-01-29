@@ -112,7 +112,7 @@ struct Engine {
   SearchState* state = nullptr;
   array<SearchState, Position::kMaxDepth + 64> search_state_stack;
 
-  static inline const int kDefaultHashSizeMB = 16;
+  static inline const int kDefaultHashSizeMB = 128;
   static inline const string kEmbeddedWeightName = "__EMBEDDED_WEIGHT__";
 
   Engine() {
