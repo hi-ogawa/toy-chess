@@ -38,6 +38,7 @@ struct MovePicker {
   Position& position;
   History& history;
   array<Move, 2> killers;
+  Move counter_move;
   MovePickerStage stage;
 
   Move tt_move;
@@ -49,8 +50,8 @@ struct MovePicker {
 
   MoveList tmp_list;
 
-  MovePicker(Position& p, History& h, Move tt_move, array<Move, 2> killers, bool in_check, bool quiescence)
-    : position{p}, history{h}, killers{killers}, tt_move{tt_move} {
+  MovePicker(Position& p, History& h, Move tt_move, array<Move, 2> killers, Move counter_move, bool in_check, bool quiescence)
+    : position{p}, history{h}, killers{killers}, counter_move{counter_move}, tt_move{tt_move} {
 
     if (in_check) {
       stage = kEvasionTTMoveStage;
@@ -96,8 +97,11 @@ struct MovePicker {
       while (!good_captures.empty()) { res_move = good_captures.get().first; return true; }
 
       stage = kRefutationStage;
+      if (counter_move != tt_move && position.isPseudoLegal(counter_move) && position.isLegal(counter_move)) {
+        refutations.put(counter_move);
+      }
       for (auto move : killers) {
-        if (move != tt_move && position.isPseudoLegal(move) && position.isLegal(move)) {
+        if (move != counter_move && move != tt_move && position.isPseudoLegal(move) && position.isLegal(move)) {
           refutations.put(move);
         }
       }

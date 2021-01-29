@@ -56,16 +56,18 @@ struct TimeControl {
 struct SearchState {
   MoveList pv;
   array<Move, 2> killers = {};
+  Move move = kNoneMove;
 
-  void updatePV(const Move& move, const MoveList& child_pv) {
+  void updatePV(const Move& best_move, const MoveList& child_pv) {
     pv.clear();
-    pv.put(move);
+    pv.put(best_move);
     for (auto child : child_pv) { pv.put(child); }
   }
 
   void reset() {
     pv.clear();
     (this + 1)->killers = {};
+    move = kNoneMove;
   }
 };
 
@@ -76,6 +78,9 @@ struct History {
   // For capture (color, attacker, to, attackee) (includes promotion/enpassant)
   array4<Score, 2, 6, 64, 7> capture = {};
 
+  // Counter move (color, piece, to)
+  array3<Move, 2, 6, 64> counter_move = {};
+
   Score& getQuietScore(const Position& p, const Move& move) {
     Color own = p.side_to_move;
     return quiet[own][move.from()][move.to()];
@@ -85,7 +90,15 @@ struct History {
     Color own = p.side_to_move;
     PieceType attacker = p.piece_on[ own][move.from()];
     PieceType attackee = p.piece_on[!own][move.to()];
+    ASSERT(attacker != kNoPieceType);
     return capture[own][attacker][move.to()][attackee];
+  }
+
+  Move& getCounterMove(const Position& p, const Move& move) {
+    Color own = p.side_to_move;
+    PieceType piece = p.piece_on[!own][move.to()];
+    ASSERT(piece != kNoPieceType);
+    return counter_move[own][piece][move.to()];
   }
 };
 
@@ -148,6 +161,8 @@ struct Engine {
   void unmakeMove(const Move& move);
   void updateKiller(const Move&);
   void updateHistory(const Move&, const MoveList&, const MoveList&, int);
+  Move getCounterMove();
+  SearchState* previousState(int i) { return (&search_state_stack[0] <= state - i) ? (state - i) : nullptr; }
 
   // Misc
   void print(std::ostream& ostr = std::cerr);

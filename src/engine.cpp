@@ -261,7 +261,7 @@ Score Engine::searchImpl(Score alpha, Score beta, int depth, int depth_end, Sear
     // Static evaluation
     if (evaluation == kScoreNone) { evaluation = position.evaluate(); }
 
-    MovePicker move_picker(position, history, tt_move, state->killers, in_check, /* quiescence */ false);
+    MovePicker move_picker(position, history, tt_move, state->killers, getCounterMove(), in_check, /* quiescence */ false);
     Move move;
     while (move_picker.getNext(move)) {
       move_cnt++;
@@ -339,7 +339,6 @@ Score Engine::searchImpl(Score alpha, Score beta, int depth, int depth_end, Sear
   transposition_table.put(position.state->key, tt_entry);
 
   if (node_type == kCutNode) {
-    updateKiller(best_move);
     updateHistory(best_move, searched_quiets, searched_captures, depth_to_go);
   }
 
@@ -407,7 +406,7 @@ Score Engine::quiescenceSearch(Score alpha, Score beta, int depth, SearchResult&
     if (beta <= score) { node_type = kCutNode; return; }
     if (alpha < score) { alpha = score; }
 
-    MovePicker move_picker(position, history, tt_move, state->killers, in_check, /* quiescence */ true);
+    MovePicker move_picker(position, history, tt_move, {}, kNoneMove, in_check, /* quiescence */ true);
     Move move;
     while (move_picker.getNext(move)) {
       move_cnt++;
@@ -490,6 +489,14 @@ void Engine::updateHistory(const Move& best_move, const MoveList& quiets, const 
       if (move == best_move) { continue; }
       update(-1, history.getQuietScore(position, move));
     }
+
+    // Quiet killer
+    updateKiller(best_move);
+
+    // Quiet counter move
+    if (previousState(1) && previousState(1)->move) {
+      history.getCounterMove(position, previousState(1)->move) = best_move;
+    }
   }
 
   // Decrease all non-best captures
@@ -499,6 +506,13 @@ void Engine::updateHistory(const Move& best_move, const MoveList& quiets, const 
   }
 }
 
+Move Engine::getCounterMove() {
+  if (previousState(1) && previousState(1)->move) {
+    return history.getCounterMove(position, previousState(1)->move);
+  }
+  return kNoneMove;
+}
+
 void Engine::makeMove(const Move& move) {
   if (move == kNoneMove) {
     position.makeNullMove();
@@ -506,6 +520,7 @@ void Engine::makeMove(const Move& move) {
     position.makeMove(move);
   }
   ASSERT(state < &search_state_stack.back());
+  state->move = move;
   state++;
   state->reset();
 }
