@@ -16,8 +16,9 @@ DEBUG_LOG=${DEBUG_LOG:-"misc/match/data/debug-$TIMESTAMP.txt"}
 STDERR_LOG=${STDERR_LOG:-"$PWD/misc/match/data/stderr-$TIMESTAMP.txt"}
 
 SF_ELO=${SF_ELO:-1700}
+ENGINE1_OPTIONS=${ENGINE1_OPTIONS:-""}
 
-ENGINE1=${ENGINE1:-"name=toy-chess cmd=build/Release/main stderr=$STDERR_LOG option.Debug=true"}
+ENGINE1=${ENGINE1:-"name=toy-chess cmd=build/Release/main stderr=$STDERR_LOG option.Debug=true $ENGINE1_OPTIONS"}
 ENGINE2=${ENGINE2:-"name=stockfish cmd=stockfish dir=thirdparty/Stockfish/src option.UCI_LimitStrength=true option.UCI_Elo=$SF_ELO" option.Hash=128}
 
 set -x

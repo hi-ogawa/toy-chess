@@ -197,3 +197,35 @@ struct Cli {
     return {};
   }
 };
+
+//
+// Iterate between two pointers by `for (auto x : PointerIterator{first, last}) ...`
+//
+
+template<class T>
+struct PointerIterator {
+  T* first = nullptr;
+  T* last = nullptr;
+  T* begin() { return first; }
+  T* end() { return last; }
+  const T* begin() const { return first; }
+  const T* end() const { return last; }
+};
+
+//
+// max_element by key function
+//
+
+template<class Iterable, class F>
+decltype(auto) maxElementByKey(Iterable xs, F f) {
+  ASSERT(xs.begin() != xs.end());
+  auto it = xs.begin();
+  auto max_x = *it;
+  auto max_y = f(max_x);
+  for (it++; it != xs.end(); it++) {
+    auto x = *it;
+    auto y = f(x);
+    if (max_y < y) { max_x = x; max_y = y; }
+  }
+  return max_x;
+};

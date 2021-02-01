@@ -52,6 +52,8 @@ struct Move {
     return SQ::fromCoords(to() % 8, from() / 8);
   }
 
+  bool isPromotionBR() const { return type() == kPromotion && (promotionType() == kBishop || promotionType() == kRook); }
+
   void print(std::ostream& ostr = std::cerr) const {
     if (type() == kNoMoveType) { ostr << "NONE"; return; }
     ostr << SQ(from()) << SQ(to());

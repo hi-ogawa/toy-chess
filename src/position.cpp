@@ -488,6 +488,8 @@ bool Position::isRepetition() const {
   return false;
 }
 
+bool Position::inCheck() const { return state->checkers; }
+
 //
 // Move generation
 //
@@ -619,6 +621,14 @@ void Position::generatePawnCaptureMoves(MoveList& move_list, Color own, Board ta
         move_list.put(Move(from, to, kEnpassant));
       }
     }
+  }
+}
+
+void Position::generateLegalMoves(MoveList& move_list) const {
+  MoveList all;
+  generateMoves(all);
+  for (auto move : all) {
+    if (isLegal(move)) { move_list.put(move); }
   }
 }
 
@@ -868,11 +878,11 @@ int64_t Position::perft(int depth, int debug) {
     if (!isLegal(move)) { continue; }
 
     if (depth == 1) { res++; continue; }
-    makeMove(move);
+    makeMove(move, /* temporary */ true);
     if (debug >= 1) { dbg(depth, move); }
     if (debug >= 2) { print(); }
     res += perft(depth - 1, debug);
-    unmakeMove(move);
+    unmakeMove(move, /* temporary */ true);
   }
   return res;
 }
@@ -886,11 +896,11 @@ vector<pair<Move, int64_t>> Position::divide(int depth, int debug) {
   for (auto move : move_list) {
     if (!isLegal(move)) { continue; }
 
-    makeMove(move);
+    makeMove(move, /* temporary */ true);
     if (debug >= 1) { dbg(depth, move); }
     if (debug >= 2) { print(); }
     res.push_back({move, perft(depth - 1, debug)});
-    unmakeMove(move);
+    unmakeMove(move, /* temporary */ true);
   }
   return res;
 }

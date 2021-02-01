@@ -1,6 +1,7 @@
 #include "base.hpp"
 #include "position.hpp"
 #include "engine.hpp"
+#include "mcts/engine.hpp"
 
 enum EventType { kCommandEvent, kSearchResultEvent, kNoEventType };
 
@@ -31,7 +32,7 @@ struct UCI {
   Queue<Event> queue; // single consumer and two producers
   std::future<bool> command_listener_thread_future;
 
-  Engine engine;
+  std::unique_ptr<EngineBase> engine;
 
   UCI(std::istream&, std::ostream&, std::ostream&);
   int mainLoop();
@@ -40,6 +41,7 @@ struct UCI {
   void cleanup();
   void handleCommand(const string&);
   void handleSearchResult(const SearchResult&);
+  void putSearchResult(const SearchResult& result) { queue.put(Event(result)); }
 
   //
   // I/O helpers
@@ -71,11 +73,11 @@ struct UCI {
   void uci_debug(std::istream& command) {
     auto value = readToken(command);
     ASSERT(value == "on" || value == "off");
-    engine.debug = (value == "on");
+    engine->debug = (value == "on");
   }
 
   void uci_isready(std::istream&) {
-    engine.stop();
+    engine->stop();
     print("readyok");
   }
 
@@ -95,15 +97,15 @@ struct UCI {
   }
 
   void uci_ucinewgame(std::istream&) {
-    engine.stop();
-    engine.reset();
+    engine->stop();
+    engine->reset();
   }
 
   void uci_position(std::istream&);
   void uci_go(std::istream&);
 
   void uci_stop(std::istream&) {
-    engine.stop();
+    engine->stop();
   }
 
   void uci_ponderhit(std::istream&) {

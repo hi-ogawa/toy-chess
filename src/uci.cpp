@@ -4,39 +4,59 @@ UCI::UCI(std::istream& istr, std::ostream& ostr, std::ostream& err_ostr)
   : istr{istr}, ostr{ostr}, err_ostr{err_ostr} {
 
   // Setup callback for asynchronous Engine::go
-  engine.search_result_callback = [this](const SearchResult& search_result) {
-    queue.put(Event(search_result));
-  };
+  engine.reset(new Engine());
+  engine->search_result_callback = std::bind(&UCI::putSearchResult, this, std::placeholders::_1);
 
   // Setup UCI options
   options.push_back({
     "Hash", toString("type spin default", Engine::kDefaultHashSizeMB, "min 1 max 16384"),
     [this](std::istream& line){
-      engine.stop();
+      engine->stop();
       int value = std::stoi(readToken(line));
       ASSERT(1 <= value && value <= 16384);
-      engine.setHashSizeMB(value);
+      engine->setHashSizeMB(value);
     }
   });
 
   options.push_back({
     "WeightFile", toString("type string default", Engine::kEmbeddedWeightName),
     [this](std::istream& line){
-      engine.stop();
+      engine->stop();
       string value = readToken(line);
-      engine.loadWeight(value);
+      engine->loadWeight(value);
     }
   });
 
   // TODO: Not sure how to set "debug on" on cutechess-cli, so here is an easy workaround.
-  options.push_back({"Debug", "type check default false", [this](std::istream& line){ engine.debug = (readToken(line) == "true"); }});
+  options.push_back({
+    "Debug", "type check default false",
+    [this](std::istream& line){
+      engine->debug = (readToken(line) == "true");
+    }
+  });
 
   options.push_back({
-    "UseNNMove", "type check default false",
+    "UseMCTS", "type check default false",
     [this](std::istream& line){
-      engine.stop();
-      string value = readToken(line);
-      engine.useNNMove(value == "true");
+      auto fen = engine->getFen();
+      bool debug = engine->debug;
+      if (readToken(line) == "true") {
+        engine.reset(new mcts::Engine());
+      } else {
+        engine.reset(new Engine());
+      }
+      engine->search_result_callback = std::bind(&UCI::putSearchResult, this, std::placeholders::_1);
+      engine->setFen(fen);
+      engine->debug = debug;
+    }
+  });
+
+  options.push_back({
+    "MCTS_cpuct", "type string default 1",
+    [this](std::istream& line){
+      float cpuct = 1;
+      line >> cpuct;
+      engine->setCPUCT(cpuct);
     }
   });
 }
@@ -72,7 +92,7 @@ void UCI::monitorEvent() {
 }
 
 void UCI::cleanup() {
-  engine.stop();
+  engine->stop();
   ASSERT(command_listener_thread_future.valid());
   ASSERT(command_listener_thread_future.wait_for(std::chrono::milliseconds(100)) == std::future_status::ready);
   ASSERT(command_listener_thread_future.get());
@@ -112,7 +132,7 @@ void UCI::handleSearchResult(const SearchResult& result) {
 }
 
 void UCI::uci_position(std::istream& command) {
-  engine.stop();
+  engine->stop();
 
   // position [fen <fenstring> | startpos ] moves <move1> .... <movei>
   auto type = readToken(command);
@@ -127,43 +147,43 @@ void UCI::uci_position(std::istream& command) {
       fen += readToken(command);
     }
   }
-  engine.position.initialize(fen);
+  engine->setFen(fen);
 
   auto token = readToken(command);
   if (token.empty()) { return; }
   if (token != "moves") { printError("Invalid position command"); return; }
 
   // In order to distinguish move types (e.g. castling/enpassant), we need full move generation.
-  // TODO: To detect 3-folds repetition, we need to keep some moves on stack
+  // TODO: To detect 3-folds repetition, we need to keep some moves/positions on stack
+  Position position(fen);
   for (int i = 0; ; i++) {
     // Reset when reaching stack limit
-    if (i == Position::kMaxDepth) { engine.position.reset(); i = 0; }
+    if (i == Position::kMaxDepth) { position.reset(); i = 0; }
 
     auto s_move = readToken(command);
     if (s_move.empty()) { break; }
 
     MoveList move_list;
-    engine.position.generateMoves(move_list);
+    position.generateMoves(move_list);
     bool found = 0;
     for (auto move : move_list) {
-      if (!engine.position.isLegal(move)) { continue; }
+      if (!position.isLegal(move)) { continue; }
       if (toString(move) == s_move) {
         found = 1;
-        engine.position.makeMove(move);
+        position.makeMove(move);
         break;
       }
     }
     ASSERT(found);
   }
-
-  engine.position.reset();
+  engine->setFen(position.toFen());
 }
 
 void UCI::uci_go(std::istream& command) {
-  engine.stop();
+  engine->stop();
 
   string token;
-  auto& params = engine.go_parameters;
+  auto& params = engine->go_parameters;
   params = {};
   while (command >> token) {
     if (token == "searchmoves") { ASSERT(0); }
@@ -180,21 +200,21 @@ void UCI::uci_go(std::istream& command) {
     if (token == "infinite") { params.depth = Position::kMaxDepth; }
   }
 
-  engine.go(/* blocking */ false);
+  engine->go(/* blocking */ false);
 }
 
 void UCI::toy_debug(std::istream&) {
-  engine.stop();
-  engine.print(ostr);
+  engine->stop();
+  engine->print(ostr);
 }
 
 void UCI::toy_perft(std::istream& command) {
-  engine.stop();
-  engine.position.evaluator = nullptr;
+  engine->stop();
+  Position position(engine->getFen());
   int depth = 1;
   command >> depth;
   auto start = std::chrono::steady_clock::now();
-  auto result = engine.position.divide(depth);
+  auto result = position.divide(depth);
   auto finish = std::chrono::steady_clock::now();
   float time = (float)std::chrono::duration_cast<std::chrono::milliseconds>(finish - start).count() / 1000;
   int64_t total = 0;
@@ -204,5 +224,4 @@ void UCI::toy_perft(std::istream& command) {
   }
   ostr << "total: " << total << "\n";
   ostr << "time: " << std::fixed << std::setprecision(3) << time << "\n";
-  engine.position.evaluator = &engine.evaluator;
 }

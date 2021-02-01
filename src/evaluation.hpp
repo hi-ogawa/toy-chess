@@ -98,7 +98,7 @@ const inline array2<Score, 6, 64> kPsqTable = {{
   }},
 }};
 
-const inline Score kTempo = 10;
+const inline Score kTempo = 0;
 
 struct Evaluation {
   array<Score, 2> piece_value = {};

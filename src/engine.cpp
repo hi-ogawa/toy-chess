@@ -45,53 +45,24 @@ void SearchResult::print(std::ostream& ostr) const {
   }
 }
 
-void Engine::print(std::ostream& ostr) {
-  ostr << ":: Position" << "\n";
-  ostr << position;
-  ostr << ":: Evaluation" << "\n";
-  ostr << evaluator.evaluate() << "\n";
-  if (position.move_evaluator) {
-    ostr << ":: Move" << "\n";
-    MoveList moves;
-    NNMoveScoreList nn_moves;
-    position.generateMoves(moves);
-    position.assignNNMoveScore(moves, nn_moves);
-    for (auto [move, score] : nn_moves) { ostr << move << ": " << score << "\n"; }
-  }
-}
-
-void Engine::stop() {
-  if (!isRunning()) { return; }
+void EngineBase::stop() {
+  if (!go_thread_future.valid()) { return; }
   ASSERT(!stop_requested.load(std::memory_order_acquire));
   stop_requested.store(true, std::memory_order_release);
   wait();
   stop_requested.store(false, std::memory_order_release);
-  ASSERT(!isRunning());
 }
 
-void Engine::wait() {
-  ASSERT(go_thread_future.valid()); // Check Engine::go didn't meet with Engine::wait yet
+void EngineBase::wait() {
+  ASSERT(go_thread_future.valid()); // Async result has not been seen yet
   go_thread_future.wait();
   ASSERT(go_thread_future.get()); // "get" will invalidate "future"
   ASSERT(!go_thread_future.valid());
 }
 
-bool Engine::checkSearchLimit() {
-  if (stop_requested.load(std::memory_order_acquire)) { return 0; }
-  if (!time_control.checkLimit()) { return 0; }
-  return 1;
-}
-
-void Engine::go(bool blocking) {
-  ASSERT(!go_thread_future.valid()); // Check previous Engine::go met with Engine::wait
-  go_thread_future = std::async([this]() { goImpl(); return true; });
-  ASSERT(go_thread_future.valid());
-  if (blocking) { wait(); }
-}
-
-void Engine::goImpl() {
+void EngineBase::go(bool blocking) {
+  ASSERT(!go_thread_future.valid()); // Previous async result has been invalidated by "Engine::wait"
   time_control.initialize(go_parameters, position.side_to_move, position.game_ply);
-
   if (debug) {
     SearchResult info;
     info.type = kSearchResultInfo;
@@ -103,7 +74,25 @@ void Engine::goImpl() {
     );
     search_result_callback(info);
   }
+  go_thread_future = std::async([this]() { goImpl(); return true; });
+  ASSERT(go_thread_future.valid());
+  if (blocking) { wait(); }
+}
 
+void Engine::print(std::ostream& ostr) {
+  ostr << ":: Position" << "\n";
+  ostr << position;
+  ostr << ":: Evaluation" << "\n";
+  ostr << evaluator.evaluate() << "\n";
+}
+
+bool Engine::checkSearchLimit() {
+  if (stop_requested.load(std::memory_order_acquire)) { return 0; }
+  if (!time_control.checkLimit()) { return 0; }
+  return 1;
+}
+
+void Engine::goImpl() {
   int depth_end = go_parameters.depth;
   ASSERT(depth_end > 0);
   results.assign(depth_end + 1, {});

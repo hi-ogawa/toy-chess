@@ -1,7 +1,8 @@
+#pragma once
+
 #include "position.hpp"
 #include "transposition_table.hpp"
 #include "nn/evaluator.hpp"
-#include "nn/move_evaluator.hpp"
 
 enum SearchResultType { kSearchResultInfo, kSearchResultBestMove, kNoSearchResult };
 
@@ -90,42 +91,56 @@ struct History {
   }
 };
 
-struct Engine {
-  Position position;
-  nn::Evaluator evaluator;
-  nn::MoveEvaluator move_evaluator;
-  History history;
-  TranspositionTable transposition_table;
 
+struct EngineBase {
+  Position position;
   GoParameters go_parameters = {};
   TimeControl time_control = {};
 
   std::atomic<bool> debug = 0;
   std::atomic<bool> stop_requested = 0; // single reader ("go" thread) + single writer ("stop" thread)
-
-  // Engine::wait invalidates future for the next Engine::go
   std::future<bool> go_thread_future;
-  bool isRunning() { return go_thread_future.valid(); }
-
-  // Result for each depth during iterative deepening
-  vector<SearchResult> results;
   std::function<void(const SearchResult&)> search_result_callback = [](const SearchResult&){};
 
+  void stop();
+  void wait();
+  void go(bool blocking);
+
+  virtual ~EngineBase() {};
+  virtual string getFen() { ASSERT(0); return ""; };
+  virtual void setFen(const string&) {};
+  virtual void reset() {};
+  virtual void print(std::ostream&) {};
+  virtual void goImpl() {};
+
+  // TODO: These are out of place...
+  virtual void setHashSizeMB(int) {};
+  virtual void loadWeight(const string&) {};
+  virtual void setCPUCT(float) {}
+};
+
+
+struct Engine : EngineBase {
+  nn::Evaluator evaluator;
+  History history;
+  TranspositionTable transposition_table;
   SearchState* state = nullptr;
   array<SearchState, Position::kMaxDepth + 64> search_state_stack;
+  vector<SearchResult> results; // Result for each depth during iterative deepening
 
   static inline const int kDefaultHashSizeMB = 128;
   static inline const string kEmbeddedWeightName = "__EMBEDDED_WEIGHT__";
 
   Engine() {
     evaluator.loadEmbeddedWeight();
-    move_evaluator.loadEmbeddedWeight();
     position.evaluator = &evaluator;
-    position.move_evaluator = nullptr;
-    position.reset();
     setHashSizeMB(kDefaultHashSizeMB);
     state = &search_state_stack[0];
+    reset();
   }
+
+  string getFen() { return position.toFen(); }
+  void setFen(const string& fen) { position.initialize(fen); }
 
   void reset() {
     position.initialize(kFenInitialPosition);
@@ -133,13 +148,9 @@ struct Engine {
     history = {};
   }
 
-  // "go" and "stop/wait" should be called from different threads
-  void stop();
-  void wait();
-
   // Iterative deepening
-  void go(bool blocking);
   void goImpl();
+
   bool checkSearchLimit();
 
   // Fixed depth alph-beta search (NOTE: Only usable from "go" method)
@@ -161,13 +172,5 @@ struct Engine {
   void loadWeight(const string& filename = kEmbeddedWeightName) {
     if (filename == kEmbeddedWeightName) evaluator.loadEmbeddedWeight();
     else evaluator.load(filename);
-  }
-
-  void useNNMove(bool use) {
-    position.move_evaluator = nullptr;
-    if (use) {
-      position.move_evaluator = &move_evaluator;
-      position.reset();
-    }
   }
 };

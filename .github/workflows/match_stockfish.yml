@@ -18,6 +18,10 @@ on:
         description: Time control (e.g. 10+0.1, 60+0.6, etc...)
         required: true
         default: "10+0.1"
+      options:
+        description: Options (e.g. "option.UseMCTS=true")
+        required: true
+        default: ""
 jobs:
   match:
     runs-on: ubuntu-20.04
@@ -50,6 +54,7 @@ jobs:
         run: >
           TC=${{ github.event.inputs.time_control }}
           CONCURRENCY=${{ github.event.inputs.concurrency }}
+          ENGINE1_OPTIONS=${{ github.event.inputs.options }}
           ROUNDS=${{ github.event.inputs.rounds }}
           SF_ELO=${{ github.event.inputs.sf_elo }}
           bash misc/match/run.sh

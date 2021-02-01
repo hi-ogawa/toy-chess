@@ -81,6 +81,7 @@ add_library(main_lib
   src/transposition_table.cpp
   src/nn/evaluator.cpp
   src/nn/move_evaluator.cpp
+  src/mcts/engine.cpp
   ${EMBEDDED_WEIGHT_CPP}
 )
 target_link_libraries(main_lib PRIVATE pthread) # for std::async
@@ -97,6 +98,7 @@ add_executable(main_test
   src/timeit_test.cpp
   src/nn/evaluator_test.cpp
   src/nn/move_evaluator_test.cpp
+  src/mcts/engine_test.cpp
 )
 target_link_libraries(main_test PRIVATE main_lib Catch2WithMain)
 target_precompile_headers(main_test REUSE_FROM main_pch)

@@ -33,7 +33,7 @@ struct Position {
   };
 
   State* state = nullptr;
-  const static inline int kMaxDepth = 256;
+  const static inline int kMaxDepth = 512;
   array<State, kMaxDepth + 64> state_stack;
 
   Position(const string& fen = kFenInitialPosition) {
@@ -89,6 +89,7 @@ struct Position {
   array<Board, 2> getPawnCapture(Color) const;
   bool isDraw() const;
   bool isRepetition() const;
+  bool inCheck() const;
 
   //
   // Make/Unmake move
@@ -110,6 +111,7 @@ struct Position {
   bool isLegal(const Move& move) const; // Check legality of pseudo legal move
   bool isPseudoLegal(const Move& move) const; // Check pseudo legality of any move (used to validate tt move)
   Move getRandomMove() const;
+  void generateLegalMoves(MoveList&) const;
 
   //
   // Perft
@@ -136,19 +138,6 @@ struct Position {
   Score evaluateLeaf(int depth) const {
     return state->checkers ? -Evaluation::mateScore(depth) : kScoreDraw;
   };
-
-  void assignNNMoveScore(const MoveList& moves, NNMoveScoreList& nn_moves) {
-    ASSERT(move_evaluator);
-    float sum = 0;
-    for (auto move : moves) {
-      float score = move_evaluator->evaluate(side_to_move, move.from(), move.to());
-      score = std::exp(score);
-      sum += score;
-      nn_moves.put({move, score});
-    }
-    for (auto& [move, score] : nn_moves) { score /= sum; }
-    std::sort(nn_moves.begin(), nn_moves.end(), [](auto x, auto y) { return x.second > y.second; });
-  }
 
   //
   // Static exchange evaluation
