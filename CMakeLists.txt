@@ -47,7 +47,7 @@ set(NN_DIR ${CMAKE_CURRENT_SOURCE_DIR}/src/nn)
 set(EVAL_WEIGHT_FILE ${NN_DIR}/data/default-eval.bin)
 set(MOVE_WEIGHT_FILE ${NN_DIR}/data/default-move.bin)
 set(EVAL_WEIGHT_FILE_URL https://github.com/hi-ogawa/toy-chess/releases/download/data/ckpt-2021-01-21-06-25-25.bin)
-set(MOVE_WEIGHT_FILE_URL https://github.com/hi-ogawa/toy-chess/releases/download/data/ckpt-move-2021-01-28-12-36-34.bin)
+set(MOVE_WEIGHT_FILE_URL https://github.com/hi-ogawa/toy-chess/releases/download/data/ckpt-move-2021-01-31-17-07-46.bin)
 
 if(NOT EXISTS ${EVAL_WEIGHT_FILE})
   message("Downloading a eval weight file from ${EVAL_WEIGHT_FILE_URL}")
