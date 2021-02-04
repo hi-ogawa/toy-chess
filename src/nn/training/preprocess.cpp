@@ -45,8 +45,8 @@ void preprocess(const string& infile, const string& outfile, bool shuffle, int b
   std::ofstream ostr(outfile, std::ios_base::out | std::ios_base::binary | std::ios_base::trunc);
   assert(ostr);
 
-  // Each entry is 128bytes (4 times worse than packed sfen format)
-  using Entry = array<uint16_t, 64>;
+  // Each entry is 130 bytes
+  using Entry = array<uint16_t, 65>;
   const uint16_t kEmbeddingPad = 10 * 64 * 64;
 
   vector<Entry> entries;
@@ -72,8 +72,8 @@ void preprocess(const string& infile, const string& outfile, bool shuffle, int b
 
     makeIndices(e.pos, x_w, x_b);
 
-    // Sneak score into the last unused index
-    entry[63] = e.score;
+    // Score
+    entry[64] = e.score;
 
     // Shuffle and write data
     if (!binpack_reader.hasNext() || (int)entries.size() == buffer_size) {

@@ -11,9 +11,8 @@ import os
 #
 
 WIDTH1 = 10 * 64 * 64 # input = { (piece-type, piece-position, king-position) }
-WIDTH2 = 128
+WIDTH2 = 32
 WIDTH3 = 32
-WIDTH4 = 32
 EMBEDDING_WIDTH = WIDTH1 + 1
 EMBEDDING_PAD = WIDTH1
 
@@ -22,22 +21,22 @@ DTYPE = torch.float32
 class MyModel(nn.Module):
   def __init__(self):
     super(MyModel, self).__init__()
-    self.embedding = nn.Embedding(EMBEDDING_WIDTH, 1, padding_idx=EMBEDDING_PAD)
-    init_scale = np.sqrt(2 * 3 / WIDTH1) # cf. nn.init.kaiming_uniform_
+    self.embedding = nn.Embedding(EMBEDDING_WIDTH, WIDTH2, padding_idx=EMBEDDING_PAD)
+    # cf. nn.init.kaiming_uniform_
+    init_scale = np.sqrt(2 * 3 / WIDTH1)
     nn.init.uniform_(self.embedding.weight, -init_scale, init_scale)
-
-  # def forward(self, x):
-  #   x_w, x_b = x[:, :32], x[:, 32:]
-  #   y_w = self.embedding(x_w).sum(dim=-2)
-  #   y_b = self.embedding(x_b).sum(dim=-2)
-  #   y = y_w - y_b
-  #   return y
+    self.fc1 = nn.Linear(2 * WIDTH2, WIDTH3)
+    self.fc2 = nn.Linear(WIDTH3, 1)
 
   def forward(self, x_w, x_b):
-    y_w = self.embedding(x_w).sum(dim=-2)
-    y_b = self.embedding(x_b).sum(dim=-2)
-    y = y_w - y_b
-    return y
+    x_w = self.embedding(x_w).sum(dim=-2)
+    x_b = self.embedding(x_b).sum(dim=-2)
+    x = torch.cat([x_w, x_b], dim=-1)
+    x = F.relu(x)
+    x = self.fc1(x)
+    x = F.relu(x)
+    x = self.fc2(x)
+    return x
 
 # class MyModel(nn.Module):
 #   def __init__(self):
@@ -99,6 +98,8 @@ class MyMetric:
 # Dataset
 #
 
+size_of_entry = 2 * 65
+
 class MyBatchDataset(torch.utils.data.Dataset):
   """Read batch directly from file (assuming data is already shuffled)"""
 
@@ -106,25 +107,23 @@ class MyBatchDataset(torch.utils.data.Dataset):
     super(MyBatchDataset, self).__init__()
     self.file = file
     self.batch_size = batch_size
-    self.size = os.stat(self.file).st_size // 128
+    self.size = os.stat(self.file).st_size // size_of_entry
 
   def read_data(self, i):
-    count = 64 * self.batch_size # in two bytes
-    offset = i * 128 * self.batch_size # in byte
-    data = np.fromfile(self.file, dtype=np.uint16, count=count, offset=offset).reshape([-1, 64])
+    count = (size_of_entry // 2) * self.batch_size # in two bytes
+    offset = i * size_of_entry * self.batch_size # in byte
+    data = np.fromfile(self.file, dtype=np.uint16, count=count, offset=offset).reshape([-1, size_of_entry // 2])
     return data
 
   def __getitem__(self, i):
     # Read binary as numpy array
     data = self.read_data(i)
-    y = data[:, -1].astype(np.int16).reshape([-1, 1])
-    x_w = data[:, :32]
-    x_b = data[:, 32:]
-    x_b[:, -1] = EMBEDDING_PAD # Reset last empty column
+    x = data[:, :64].astype(np.long)
+    y = data[:, 64].astype(np.int16).astype(np.float32).reshape([-1, 1])
     # Convert to torch tensor
-    x_w = torch.tensor(x_w.astype(np.long))
-    x_b = torch.tensor(x_b.astype(np.long))
-    y = torch.tensor(y.astype(np.float32))
+    x_w = torch.tensor(x[:, :32])
+    x_b = torch.tensor(x[:, 32:])
+    y = torch.tensor(y)
     return x_w, x_b, y
 
   def __len__(self):
