@@ -108,6 +108,10 @@ struct Rng {
     auto x = next(), y = next();
     return (uint64_t(x) << 32) | y;
   }
+
+  float uniform() {
+    return next() / float(1ULL << 32);
+  }
 };
 
 //

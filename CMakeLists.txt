@@ -82,6 +82,7 @@ add_library(main_lib
   src/nn/evaluator.cpp
   src/nn/move_evaluator.cpp
   src/mcts/engine.cpp
+  src/zero/evaluator.cpp
   ${EMBEDDED_WEIGHT_CPP}
 )
 target_link_libraries(main_lib PRIVATE pthread) # for std::async
@@ -129,3 +130,8 @@ target_precompile_headers(nn_preprocess_move REUSE_FROM main_pch)
 # slim_pgn
 add_executable(slim_pgn src/nn/training/slim_pgn.cpp)
 target_precompile_headers(slim_pgn REUSE_FROM main_pch)
+
+# zero_selfplay
+add_executable(zero_selfplay src/zero/main_selfplay.cpp)
+target_link_libraries(zero_selfplay PRIVATE main_lib)
+target_precompile_headers(zero_selfplay REUSE_FROM main_pch)

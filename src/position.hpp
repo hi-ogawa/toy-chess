@@ -6,6 +6,7 @@
 #include "transposition_table.hpp"
 #include "nn/evaluator.hpp"
 #include "nn/move_evaluator.hpp"
+#include "zero/evaluator.hpp"
 
 //
 // Position
@@ -124,6 +125,7 @@ struct Position {
   //
   nn::Evaluator* evaluator = nullptr;
   nn::MoveEvaluator* move_evaluator = nullptr;
+  zero::Evaluator* zero_evaluator = nullptr;
 
   // Score for side_to_move
   Score evaluate() const {
