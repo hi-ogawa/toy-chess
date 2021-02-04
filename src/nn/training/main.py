@@ -22,27 +22,47 @@ DTYPE = torch.float32
 class MyModel(nn.Module):
   def __init__(self):
     super(MyModel, self).__init__()
-    self.embedding = nn.Embedding(EMBEDDING_WIDTH, WIDTH2, padding_idx=EMBEDDING_PAD)
+    self.embedding = nn.Embedding(EMBEDDING_WIDTH, 1, padding_idx=EMBEDDING_PAD)
     init_scale = np.sqrt(2 * 3 / WIDTH1) # cf. nn.init.kaiming_uniform_
     nn.init.uniform_(self.embedding.weight, -init_scale, init_scale)
-    self.l1_bias = torch.nn.Parameter(torch.zeros(WIDTH2)) # NOTE: Not used currently
-    self.l2 = nn.Linear(2 * WIDTH2, WIDTH3)
-    self.l3 = nn.Linear(WIDTH3, WIDTH4)
-    self.l4 = nn.Linear(WIDTH4, 1)
+
+  # def forward(self, x):
+  #   x_w, x_b = x[:, :32], x[:, 32:]
+  #   y_w = self.embedding(x_w).sum(dim=-2)
+  #   y_b = self.embedding(x_b).sum(dim=-2)
+  #   y = y_w - y_b
+  #   return y
 
   def forward(self, x_w, x_b):
-    x_w = self.embedding(x_w)
-    x_b = self.embedding(x_b)
-    x_w = torch.sum(x_w, dim=-2)
-    x_b = torch.sum(x_b, dim=-2)
-    x = torch.cat([x_w, x_b], dim=-1)
-    x = F.relu(x)
-    x = self.l2(x)
-    x = F.relu(x)
-    x = self.l3(x)
-    x = F.relu(x)
-    x = self.l4(x)
-    return x
+    y_w = self.embedding(x_w).sum(dim=-2)
+    y_b = self.embedding(x_b).sum(dim=-2)
+    y = y_w - y_b
+    return y
+
+# class MyModel(nn.Module):
+#   def __init__(self):
+#     super(MyModel, self).__init__()
+#     self.embedding = nn.Embedding(EMBEDDING_WIDTH, WIDTH2, padding_idx=EMBEDDING_PAD)
+#     init_scale = np.sqrt(2 * 3 / WIDTH1) # cf. nn.init.kaiming_uniform_
+#     nn.init.uniform_(self.embedding.weight, -init_scale, init_scale)
+#     self.l1_bias = torch.nn.Parameter(torch.zeros(WIDTH2)) # NOTE: Not used currently
+#     self.l2 = nn.Linear(2 * WIDTH2, WIDTH3)
+#     self.l3 = nn.Linear(WIDTH3, WIDTH4)
+#     self.l4 = nn.Linear(WIDTH4, 1)
+
+#   def forward(self, x_w, x_b):
+#     x_w = self.embedding(x_w)
+#     x_b = self.embedding(x_b)
+#     x_w = torch.sum(x_w, dim=-2)
+#     x_b = torch.sum(x_b, dim=-2)
+#     x = torch.cat([x_w, x_b], dim=-1)
+#     x = F.relu(x)
+#     x = self.l2(x)
+#     x = F.relu(x)
+#     x = self.l3(x)
+#     x = F.relu(x)
+#     x = self.l4(x)
+#     return x
 
 #
 # Metric
@@ -123,8 +143,6 @@ MODEL_INIT_SEED = 0x12345678
 SCORE_SCALE = 208
 SCORE_TEMPO = 28
 
-DEBUG_CUDA_MEMORY = False
-
 def normalize_score(y):
   return (y - SCORE_TEMPO) / SCORE_SCALE
 
@@ -178,7 +196,7 @@ def train(dataset_file, test_dataset_file, ckpt_file, ckpt_dir, num_epochs, batc
     metric = MyMetric()
     model.train()
     with tqdm(train_loader) as progressbar:
-      for i, batch_sample in enumerate(progressbar):
+      for batch_sample in progressbar:
         optimizer.zero_grad()
         x_w, x_b, y_target = [t.to(DEVICE) for t in batch_sample]
         y_target = normalize_score(y_target)
@@ -186,17 +204,11 @@ def train(dataset_file, test_dataset_file, ckpt_file, ckpt_dir, num_epochs, batc
         loss = my_loss_func(y_model, y_target, loss_mode)
         loss.backward()
         optimizer.step()
-        loss_L1 = F.l1_loss(y_model, y_target)
         metric.update(y_model.detach().cpu(), y_target.detach().cpu(), loss.detach().cpu() * y_model.numel())
-        progressbar.set_postfix(loss_L1=float(loss_L1), loss=float(loss))
+        mean, std, loss_L1, acc, loss = map(float, metric.compute())
+        progressbar.set_postfix(loss=loss, loss_L1=loss_L1, acc=acc, mean=mean, std=std)
         del x_w, x_b, y_target, y_model
-        if i % 1000 == 0 and DEVICE.type == 'cuda' and DEBUG_CUDA_MEMORY:
-          print(f"i = {i}")
-          print(torch.cuda.memory_summary())
-    mean, std, l1, accuracy, metric_loss = metric.compute()
-    print(f"mean = {mean}, std = {std}, L1 = {l1}, accuracy = {accuracy}, loss = {metric_loss}")
-    train_loss = metric_loss
-    train_accuracy = accuracy
+    _mean, _std, _l1, train_accuracy, train_loss = metric.compute()
 
     test_loss = 0
     test_accuracy = 0
@@ -204,17 +216,17 @@ def train(dataset_file, test_dataset_file, ckpt_file, ckpt_dir, num_epochs, batc
       print(f":: Validation loop")
       metric = MyMetric()
       model.eval()
-      for batch_sample in tqdm(test_loader):
-        x_w, x_b, y_target = [t.to(DEVICE) for t in batch_sample]
-        y_target = normalize_score(y_target)
-        y_model = model(x_w, x_b)
-        loss = my_loss_func(y_model, y_target, loss_mode)
-        metric.update(y_model.detach().cpu(), y_target.detach().cpu(), loss.detach().cpu() * y_model.numel())
-        del x_w, x_b, y_target, y_model
-      mean, std, l1, accuracy, metric_loss = metric.compute()
-      print(f"mean = {mean}, std = {std}, L1 = {l1}, accuracy = {accuracy}, loss = {metric_loss}")
-      test_loss = metric_loss
-      test_accuracy = accuracy
+      with tqdm(test_loader) as progressbar:
+        for batch_sample in progressbar:
+          x_w, x_b, y_target = [t.to(DEVICE) for t in batch_sample]
+          y_target = normalize_score(y_target)
+          y_model = model(x_w, x_b)
+          loss = my_loss_func(y_model, y_target, loss_mode)
+          metric.update(y_model.detach().cpu(), y_target.detach().cpu(), loss.detach().cpu() * y_model.numel())
+          mean, std, loss_L1, acc, loss = map(float, metric.compute())
+          progressbar.set_postfix(loss=loss, loss_L1=loss_L1, acc=acc, mean=mean, std=std)
+          del x_w, x_b, y_target, y_model
+      _mean, _std, _l1, test_accuracy, test_loss = metric.compute()
       scheduler.step(test_loss)
 
     if ckpt_dir is not None:
@@ -382,7 +394,7 @@ def main_cli():
   parser.add_argument("--weight-decay", type=float, default=0)
   parser.add_argument("--learning-rate", type=float, default=0.001)
   parser.add_argument("--scheduler-patience", type=float, default=0)
-  parser.add_argument("--loss-mode", type=str, default="bce")
+  parser.add_argument("--loss-mode", type=str, default="mse")
   # export_embedding
   parser.add_argument("--data-tsv", type=str)
   parser.add_argument("--meta-tsv", type=str)
