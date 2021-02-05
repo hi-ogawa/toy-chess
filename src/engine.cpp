@@ -341,7 +341,7 @@ Score Engine::searchImpl(Score alpha, Score beta, int depth, int depth_end, Sear
   tt_entry.depth = depth_to_go;
   transposition_table.put(position.state->key, tt_entry);
 
-  if (node_type == kCutNode) {
+  if (node_type == kCutNode || node_type == kPVNode) {
     updateKiller(best_move);
     updateHistory(best_move, searched_quiets, searched_captures, depth_to_go);
   }
