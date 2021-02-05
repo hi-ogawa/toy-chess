@@ -140,6 +140,9 @@ void Engine::goImpl() {
       );
       search_result_callback(res_info);
     }
+
+    // Check node count
+    if (0 < go_parameters.nodes && go_parameters.nodes <= res.stats_nodes) { break; }
   }
 
   // Send "bestmove ..."

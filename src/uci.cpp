@@ -165,7 +165,7 @@ void UCI::uci_go(std::istream& command) {
     if (token == "binc") { command >> params.inc[kBlack]; }
     if (token == "movestogo") { command >> params.movestogo; }
     if (token == "depth") { command >> params.depth; ASSERT(params.depth > 0); }
-    if (token == "nodes") { ASSERT(0); }
+    if (token == "nodes") { command >> params.nodes; ASSERT(params.nodes > 0); }
     if (token == "mate") { ASSERT(0); }
     if (token == "movetime") { command >> params.movetime; }
     if (token == "infinite") { params.depth = Position::kMaxDepth; }

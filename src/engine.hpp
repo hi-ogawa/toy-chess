@@ -32,6 +32,7 @@ struct GoParameters {
   array<int64_t, 2> inc = {0, 0};
   int64_t movestogo = 0;
   int64_t movetime = 0;
+  int64_t nodes = 0;
   int depth = Position::kMaxDepth;
 };
 
