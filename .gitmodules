@@ -6,4 +6,4 @@
 	url = git@github.com:nodchip/Stockfish.git
 [submodule "thirdparty/lichess-bot"]
 	path = thirdparty/lichess-bot
-	url = git@github.com:ShailChoksi/lichess-bot.git
+	url = git@github.com:hi-ogawa/lichess-bot.git
