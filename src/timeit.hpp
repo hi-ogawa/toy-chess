@@ -3,7 +3,7 @@
 //
 
 //
-// NOTE: For Catch2 integration, we can use this a bit clumsy pattern:
+// NOTE: For Catch2 integration, we can use this (a bit clumsy) pattern:
 //
 //   SECTION("[Name of benchmark]") {
 //     INFO(timeit::timeit([&]() {
@@ -12,8 +12,6 @@
 //     SUCCEED();
 //   }
 //
-
-#include "misc.hpp"
 
 namespace timeit {
 
@@ -37,7 +35,7 @@ namespace timeit {
   template<class FuncT>
   struct Timer {
     FuncT func;
-    Timer(FuncT func) : func{func} {}
+    Timer(FuncT _func) : func{_func} {}
 
     Second run(int64_t n) {
       auto start = Clock::now();
@@ -81,7 +79,7 @@ namespace timeit {
     return timer.repeat(n, r);
   }
 
-  constexpr array<pair<const char*, double>, 4> kTimeUnits = {{
+  constexpr std::array<std::pair<const char*, double>, 4> kTimeUnits = {{
     {"nsec", 1e9}, {"usec", 1e6}, {"msec", 1e3}, {"sec", 1e0}}};
 
   inline int autoTimeUnit(Second t) {
@@ -92,9 +90,9 @@ namespace timeit {
     return 3;
   }
 
-  inline string formatTime(Second t, int unit_idx, bool show_unit = 1) {
+  inline std::string formatTime(Second t, int unit_idx, bool show_unit = 1) {
     auto [unit, scale] = kTimeUnits[unit_idx];
-    string res = toString(t * scale);
+    auto res = std::to_string(t * scale);
     if (show_unit) { res = res + " " + unit; }
     return res;
   }

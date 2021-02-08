@@ -3,11 +3,12 @@
 
 TEST_CASE("timeit") {
 
-  vector<int> ones(1000000, 1);
+  std::vector<int> ones(1000000, 1);
 
-  timeit::timeit([&]() {
+  INFO(timeit::timeit([&]() {
     int64_t sum = 0;
     for (auto x : ones) { sum += x; }
     return sum;
-  });
+  }));
+  SUCCEED();
 }
