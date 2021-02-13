@@ -71,6 +71,7 @@ add_library(main_lib
   src/engine.cpp
   src/uci.cpp
   src/transposition_table.cpp
+  src/nn/utils.cpp
   src/nn/evaluator.cpp
   ${EMBEDDED_WEIGHT_CPP}
 )

@@ -62,11 +62,11 @@ struct MyModel {
 struct Evaluator {
   MyModel model;
 
-  alignas(kMaxFloatVectorSize) Float accumulator[2][WIDTH2] = {};
-  alignas(kMaxFloatVectorSize) Float tmp2[2 * WIDTH2] = {};
-  alignas(kMaxFloatVectorSize) Float tmp3[WIDTH3] = {};
-  alignas(kMaxFloatVectorSize) Float tmp4[WIDTH4] = {};
-  Float tmp5 = 0;
+  alignas(kMaxFloatVectorSize) float accumulator[2][WIDTH2] = {};
+  alignas(kMaxFloatVectorSize) float tmp2[2 * WIDTH2] = {};
+  alignas(kMaxFloatVectorSize) float tmp3[WIDTH3] = {};
+  alignas(kMaxFloatVectorSize) float tmp4[WIDTH4] = {};
+  float tmp5 = 0;
 
   array<Square, 2> kings;
 
